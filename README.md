@@ -6,6 +6,18 @@
 
 ---
 
+## 技术栈
+
+| 层级 | 技术 | 说明 |
+|------|------|------|
+| **数据库** | TDengine 3.x | 高性能时序数据库 |
+| **后端** | C++17 | HTTP 服务器、HEALPix 空间索引 |
+| **分类** | Python + LightGBM | feets 特征提取 + 机器学习 |
+| **前端** | HTML/JS | Three.js 3D、Chart.js 图表 |
+| **容器** | Apptainer | TDengine 运行环境 |
+
+---
+
 ## 功能特性
 
 | 功能 | 说明 |
@@ -448,9 +460,9 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 
 ---
 
-## 许可证
+## License
 
-MIT License
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
