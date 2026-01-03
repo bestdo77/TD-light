@@ -160,10 +160,21 @@ pip install numpy pandas scikit-learn lightgbm taospy feets taospy numpy pandas 
 
 ### 3. 配置 TDengine 容器
 
-项目已包含 `tdengine-fs/` 容器目录。如需重建：
+`tdengine-fs/` 容器目录需自行构建：
+
+1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
+2. 下载 **TDengine 3.3.2.0** 或更高版本的 Docker 镜像
+3. 使用 Apptainer 构建 sandbox：
 
 ```bash
 apptainer build --sandbox tdengine-fs docker://tdengine/tdengine:3.3.2.0
+```
+
+或直接拉取：
+
+```bash
+apptainer pull tdengine.sif docker://tdengine/tdengine:3.3.2.0
+apptainer build --sandbox tdengine-fs tdengine.sif
 ```
 
 ### 4. 编辑配置文件
