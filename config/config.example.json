@@ -1,0 +1,30 @@
+{
+    "database": {
+        "host": "localhost",
+        "port": 6030,
+        "user": "root",
+        "password": "taosdata",
+        "name": "gaiadr2_lc"
+    },
+    "web": {
+        "port": 5001,
+        "host": "0.0.0.0"
+    },
+    "classification": {
+        "model_path": "../models/lgbm_model.pkl",
+        "metadata_path": "../models/metadata.pkl",
+        "confidence_threshold": 0.95,
+        "update_database": true
+    },
+    "paths": {
+        "libs": "../libs",
+        "taos_cfg": "../config/taos_cfg",
+        "python": "python3",
+        "temp_dir": "/tmp"
+    },
+    "healpix": {
+        "nside": 64,
+        "scheme": "NEST"
+    }
+}
+

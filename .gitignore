@@ -1,0 +1,54 @@
+# 编译产物
+*.o
+*.sif
+web/web_api
+insert/catalog_importer
+insert/lightcurve_importer
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+pyenv/
+*.egg-info/
+
+# 配置文件 (包含敏感信息)
+config.json
+config/config.json
+
+# 数据和模型 (太大，需联系作者获取)
+data/
+models/*.pkl
+classifier/*.pkl
+
+# TDengine 库文件 (从官方获取)
+libs/libtaos*.so*
+
+# TDengine 运行时数据
+runtime/
+
+# 临时文件
+*.log
+*.tmp
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 容器
+tdengine-fs/
+apptainer/*.sif
+
+# 备份
+*.bak
+*~
+

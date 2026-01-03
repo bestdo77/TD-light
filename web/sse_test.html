@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><title>SSE Test</title></head>
+<body>
+<h1>SSE Test</h1>
+<button onclick="startSSE()">Start SSE</button>
+<button onclick="stopSSE()">Stop SSE</button>
+<pre id="output" style="background:#1e1e1e;color:#d4d4d4;padding:10px;height:400px;overflow:auto;"></pre>
+<script>
+let es = null;
+function startSSE() {
+    if (es) es.close();
+    document.getElementById('output').textContent = 'Connecting...\\n';
+    es = new EventSource('/api/import/stream');
+    es.onmessage = (e) => {
+        document.getElementById('output').textContent += 'MSG: ' + e.data.substring(0,100) + '...\\n';
+    };
+    es.onerror = (e) => {
+        document.getElementById('output').textContent += 'ERROR: ' + JSON.stringify(e) + '\\n';
+    };
+    es.onopen = () => {
+        document.getElementById('output').textContent += 'CONNECTED\\n';
+    };
+}
+function stopSSE() {
+    if (es) { es.close(); es = null; }
+    document.getElementById('output').textContent += 'STOPPED\\n';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TD-light 光变曲线分类系统 (v2.0 Terminal)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-secondary: #6b7280;
+            --accent: #2563eb;
+            --accent-light: #dbeafe;
+            --success: #059669;
+            --warning: #d97706;
+            --danger: #dc2626;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+        
+        /* 顶部导航 */
+        .header {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 0 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .nav-tab {
+            padding: 14px 28px;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+        
+        .nav-tab:hover {
+            background: var(--bg);
+            color: var(--text);
+        }
+        
+        .nav-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+        
+        /* 主内容区 */
+        .main-container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 32px 48px;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* 两栏布局 */
+        .layout {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 32px;
+        }
+        
+        /* 卡片样式 */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+        
+        .card-header {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-light);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 0.95rem;
+        }
+        
+        /* 表单 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-family: 'Source Code Pro', monospace;
+            transition: all 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        /* 按钮 */
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #047857;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-row {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn-row .btn {
+            flex: 1;
+        }
+        
+        /* 天体列表 */
+        .object-list {
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        
+        .object-item {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        
+        .object-item:last-child {
+            border-bottom: none;
+        }
+        
+        .object-item:hover {
+            background: var(--bg);
+        }
+        
+        .object-item.selected {
+            background: var(--accent-light);
+            border-left: 3px solid var(--accent);
+        }
+        
+        .object-checkbox {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        
+        .object-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .object-id {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+        
+        .object-coords {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        
+        .object-view-btn {
+            padding: 8px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .object-view-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        
+        .empty-state {
+            padding: 48px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state-icon {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+        
+        /* 进度面板 */
+        .progress-panel {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 20px;
+        }
+        
+        .steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            position: relative;
+        }
+        
+        .steps::before {
+            content: '';
+            position: absolute;
+            top: 18px;
+            left: 60px;
+            right: 60px;
+            height: 2px;
+            background: var(--border);
+            z-index: 0;
+        }
+        
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            transition: all 0.3s;
+        }
+        
+        .step-circle.active {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: white;
+        }
+        
+        .step-circle.done {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+        
+        .step-label {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .progress-bar-container {
+            background: var(--border);
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 6px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            margin-top: 14px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        /* 天图区域 */
+        .sky-map-container {
+            height: 480px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #0a1628;
+            position: relative;
+        }
+        
+        .sky-map-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #64748b;
+        }
+        
+        .sky-map-placeholder i {
+            font-size: 3.5rem;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+        
+        .map-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 10;
+        }
+        
+        .map-btn {
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .map-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        
+        /* 光变曲线 */
+        .chart-container {
+            height: 420px;
+            position: relative;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        
+        .chart-placeholder i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+        
+        /* 结果表格 */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .results-table th {
+            padding: 14px 18px;
+            text-align: left;
+            background: var(--bg);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .results-table td {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+        }
+        
+        .results-table tr:hover {
+            background: var(--bg);
+            cursor: pointer;
+        }
+        
+        .class-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: white;
+        }
+        
+        /* 元数据 */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+        
+        .meta-item {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .meta-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .meta-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+            font-family: 'Source Code Pro', monospace;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 90px;
+            right: 32px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* 计数徽章 */
+        .count-badge {
+            background: var(--accent);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        /* 设置页 */
+        .settings-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d1d5db;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+        <div class="header">
+        <div class="logo">
+            <div class="logo-icon"><i class="fas fa-star"></i></div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                TD-light 
+                <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.1); color: var(--accent); padding: 2px 8px; border-radius: 12px; font-weight: normal; border: 1px solid rgba(59, 130, 246, 0.2);">Stepper Mode</span>
+            </div>
+        </div>
+        <div class="nav-tabs">
+            <div class="nav-tab active" id="nav-portal" onclick="window.switchTab('portal')">天体分类</div>
+            <div class="nav-tab" id="nav-import" onclick="window.switchTab('import')">数据导入</div>
+            <div class="nav-tab" id="nav-settings" onclick="window.switchTab('settings')">系统设置</div>
+        </div>
+        </div>
+        
+    <div class="main-container">
+        <!-- 天体分类页 -->
+        <div id="portalTab" class="tab-content active">
+            <div class="layout">
+                <!-- 左侧控制面板 -->
+                <div class="left-panel">
+                    <!-- 锥形搜索 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-search"></i></div>
+                                <span>锥形搜索</span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">中心 RA (度)</label>
+                                <input type="number" class="form-input" id="centerRa" value="180" step="0.001">
+                    </div>
+                            <div class="form-group">
+                                <label class="form-label">中心 DEC (度)</label>
+                                <input type="number" class="form-input" id="centerDec" value="0" step="0.001">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">搜索半径 (度)</label>
+                            <input type="number" class="form-input" id="radius" value="1.0" step="0.1" min="0.1" max="10">
+                    </div>
+                        <div class="btn-row">
+                            <button class="btn btn-primary" onclick="window.performConeSearch(false);">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                            <button class="btn" onclick="window.performConeSearch(true);" style="background: #6366f1;">
+                                <i class="fas fa-plus"></i> 追加
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- ID 检索 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-fingerprint"></i></div>
+                                <span>ID 检索</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Source ID (支持多个，每行一个)</label>
+                            <textarea class="form-input" id="searchSourceId" rows="3" placeholder="3602817205828729344&#10;3795050836667031936&#10;..." style="resize: vertical; font-family: 'Source Code Pro', monospace;"></textarea>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn btn-primary" onclick="window.searchById(false);">
+                                <i class="fas fa-search"></i> 检索
+                            </button>
+                            <button class="btn" onclick="window.searchById(true);" style="background: #6366f1;">
+                                <i class="fas fa-plus"></i> 追加
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 矩形检索 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-vector-square"></i></div>
+                                <span>矩形检索</span>
+                            </div>
+                            </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">RA 最小值 (度)</label>
+                                <input type="number" class="form-input" id="raMin" value="179" step="0.001">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">RA 最大值 (度)</label>
+                                <input type="number" class="form-input" id="raMax" value="181" step="0.001">
+                            </div>
+                            </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">DEC 最小值 (度)</label>
+                                <input type="number" class="form-input" id="decMin" value="-1" step="0.001">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">DEC 最大值 (度)</label>
+                                <input type="number" class="form-input" id="decMax" value="1" step="0.001">
+                            </div>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn btn-primary" onclick="window.performRectSearch(false);">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                            <button class="btn" onclick="window.performRectSearch(true);" style="background: #6366f1;">
+                                <i class="fas fa-plus"></i> 追加
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 待分类列表 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-list"></i></div>
+                                <span>待分类天体</span>
+                                </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="count-badge" id="selectedCount">0</span>
+                                <button onclick="window.downloadObjectList();" title="下载列表" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; color: var(--text-secondary);">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button onclick="window.clearObjectList();" title="清空列表" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; color: var(--text-secondary);">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <button onclick="window.selectAllObjects(true);" style="flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                                <i class="fas fa-check-double"></i> 全选
+                            </button>
+                            <button onclick="window.selectAllObjects(false);" style="flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                                <i class="fas fa-square"></i> 取消全选
+                            </button>
+                        </div>
+                        <div class="object-list" id="objectList">
+                            <div class="empty-state">
+                                <div class="empty-state-icon"><i class="fas fa-search"></i></div>
+                                <div>使用上方搜索功能查找天体</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-success" id="classifyBtn" onclick="window.classifySelectedObjects();" disabled>
+                                <i class="fas fa-play"></i> 开始分类
+                            </button>
+                        </div>
+                        </div>
+                    </div>
+                    
+                <!-- 右侧内容区 -->
+                <div class="right-panel">
+                    <!-- 天图 -->
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div class="sky-map-container" id="skyMapContainer">
+                            <div class="map-controls">
+                                <button class="map-btn" onclick="window.toggleSkyMapMode();">
+                                    <i class="fas fa-sync-alt"></i> 切换 2D/3D
+                                </button>
+                            </div>
+                            <div class="sky-map-placeholder" id="skyMapPlaceholder">
+                                <i class="fas fa-globe"></i>
+                                <div>搜索区域后显示天图</div>
+                        </div>
+                            <div id="skyMap3D" style="width: 100%; height: 100%;"></div>
+                            <canvas id="skyMapCanvas" style="display: none; width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+                
+                    <!-- 光变曲线 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+                                <span>光变曲线</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div id="objectInfo" style="color: var(--text-secondary); font-size: 0.95rem;"></div>
+                                <button onclick="window.downloadLightcurve();" title="下载光变曲线" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; color: var(--text-secondary);">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="lightcurveChart" style="display: none; width: 100%; height: 100%;"></canvas>
+                            <div class="chart-placeholder" id="chartPlaceholder">
+                                <i class="fas fa-chart-line"></i>
+                                <div>点击天体查看光变曲线</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 分类进度 -->
+                    <div class="card" id="progressPanel" style="display: none;">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                                <span>分类进度</span>
+                            </div>
+                        </div>
+                        <div class="steps" style="display: flex; justify-content: space-between; margin-bottom: 20px; position: relative;">
+                            <div style="position: absolute; top: 18px; left: 60px; right: 60px; height: 2px; background: var(--border); z-index: 0;"></div>
+                            <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                                <div class="step-circle" id="step1" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-database"></i></div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">提取数据</div>
+                            </div>
+                            <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                                <div class="step-circle" id="step2" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-cog"></i></div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">提取特征</div>
+                            </div>
+                            <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                                <div class="step-circle" id="step3" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-chart-bar"></i></div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">分类预测</div>
+                            </div>
+                        </div>
+                        <div style="background: var(--border); border-radius: 6px; height: 8px; overflow: hidden;">
+                            <div class="progress-bar" id="progressBar" style="height: 100%; background: var(--accent); border-radius: 6px; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+                            <div id="progressText" style="color: var(--text-secondary); font-size: 0.95rem;">准备中...</div>
+                            <button id="stopBtnRight" class="btn btn-danger" onclick="window.stopClassification();" style="padding: 8px 16px; width: auto;">
+                                <i class="fas fa-stop"></i> 停止分类
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 分类结果 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-table"></i></div>
+                                <span>分类结果</span>
+                            </div>
+                        </div>
+                        <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+                            <table class="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Source ID</th>
+                                        <th>坐标 (RA, DEC)</th>
+                                        <th>分类</th>
+                                        <th>置信度</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsBody">
+                                    <tr><td colspan="4" style="text-align: center; padding: 48px; color: var(--text-secondary);">完成分类后显示结果</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 天体信息 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <div class="card-icon"><i class="fas fa-info-circle"></i></div>
+                                <span>天体信息</span>
+                    </div>
+                        </div>
+                        <div class="meta-grid">
+                            <div class="meta-item">
+                                <div class="meta-label">Source ID</div>
+                                <div class="meta-value" id="metaSourceId">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">Healpix ID</div>
+                                <div class="meta-value" id="metaHealpixId">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">RA</div>
+                                <div class="meta-value" id="metaRa">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">DEC</div>
+                                <div class="meta-value" id="metaDec">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">类别</div>
+                                <div class="meta-value" id="metaClass">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">波段</div>
+                                <div class="meta-value" id="metaBand">-</div>
+                            </div>
+                            <div class="meta-item">
+                                <div class="meta-label">数据点数</div>
+                                <div class="meta-value" id="metaCount">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据导入页 -->
+        <div id="importTab" class="tab-content">
+            <div class="settings-container">
+                <!-- 公共配置 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-cog"></i></div>
+                            <span>公共配置</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">坐标文件路径 (source_coordinates.csv)</label>
+                        <input type="text" class="form-input" id="coordsPath" placeholder="/app/data/catalogs_gaiadr2/source_coordinates.csv">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">数据库名</label>
+                            <input type="text" class="form-input" id="importDbName" value="gaiadr2_lc">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">HEALPix NSIDE</label>
+                            <input type="number" class="form-input" id="importNside" value="64" min="1" max="512">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据库管理 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-database"></i></div>
+                            <span>数据库管理</span>
+                        </div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        删除现有数据库以释放 VGroups 资源（重新导入前需要先删除）
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">选择数据库</label>
+                            <select id="dropDbSelect" class="form-input" style="padding: 10px;">
+                                <option value="">-- 点击刷新列表 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end; gap: 8px;">
+                            <button class="btn btn-outline" onclick="window.refreshDbList();" style="padding: 10px 16px;">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button class="btn btn-danger" onclick="window.dropSelectedDatabase();" style="padding: 10px 16px;">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 星表导入 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-table"></i></div>
+                            <span>星表导入</span>
+                        </div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        从 CSV 导入星表元数据，自动根据 ra/dec 计算 HEALPix ID
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">星表目录路径</label>
+                        <input type="text" class="form-input" id="catalogPath" placeholder="/app/data/catalogs_gaiadr2/catalogs/">
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary" onclick="window.startCatalogImport();">
+                            <i class="fas fa-upload"></i> 开始导入
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 光变曲线导入 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+                            <span>光变曲线导入</span>
+                        </div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        从 CSV 导入光变曲线时序数据
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">光变曲线目录路径</label>
+                        <input type="text" class="form-input" id="lightcurvePath" placeholder="/app/data/gaiadr2/">
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary" onclick="window.startLightcurveImport();">
+                            <i class="fas fa-upload"></i> 开始导入
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 导入进度 -->
+                <div class="card" id="importProgressCard" style="display: none;">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                            <span>导入进度</span>
+                        </div>
+                        <button class="btn btn-danger" onclick="window.stopImport();" style="padding: 6px 12px;">
+                            <i class="fas fa-stop"></i> 停止
+                        </button>
+                    </div>
+                    
+                    <div class="steps" style="display: flex; justify-content: space-between; margin-bottom: 20px; position: relative; padding: 0 10px;">
+                        <div style="position: absolute; top: 15px; left: 40px; right: 40px; height: 2px; background: var(--border); z-index: 0;"></div>
+                        <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                            <div class="step-circle" id="importStep1" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-database"></i></div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">建表</div>
+                        </div>
+                        <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                            <div class="step-circle" id="importStep2" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-file-import"></i></div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">插入</div>
+                        </div>
+                        <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
+                            <div class="step-circle" id="importStep3" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-check"></i></div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">完成</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span id="importProgressText">准备中...</span>
+                            <span id="importProgressPercent">0%</span>
+                        </div>
+                        <div style="background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div id="importProgressBar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div id="importStats" style="font-family: 'Source Code Pro', monospace; font-size: 0.85rem; color: var(--text-secondary);">
+                        <!-- 统计信息 -->
+                    </div>
+                </div>
+
+                <!-- 使用说明 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-info-circle"></i></div>
+                            <span>使用说明</span>
+                        </div>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.8;">
+                        <p><strong>星表导入</strong>：每个 CSV 文件包含一个 HEALPix 区域的星表，文件名格式为 <code>healpix_*.csv</code></p>
+                        <p style="margin-top: 8px;"><strong>光变曲线导入</strong>：每个 CSV 文件包含一个天体的光变曲线，文件名格式为 <code>source_id.csv</code></p>
+                        <p style="margin-top: 8px;"><strong>注意</strong>：导入是资源密集型操作，建议在服务器负载较低时进行。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 系统设置页 -->
+        <div id="settingsTab" class="tab-content">
+            <div class="settings-container">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-database"></i></div>
+                            <span>数据库配置</span>
+                        </div>
+                            </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">数据库名称</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" class="form-input" id="configDbName" placeholder="gaiadr2_lc">
+                                <select id="dbListSelect" class="form-input" style="width: 40px; padding: 0 8px;" onchange="document.getElementById('configDbName').value = this.value;">
+                                    <option value="">▼</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主机地址</label>
+                            <input type="text" class="form-input" id="configDbHost" placeholder="localhost">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" class="form-input" id="configDbPort" placeholder="6041">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-input" id="configDbUser" placeholder="root">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
+                            <span>分类配置</span>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">置信度阈值</label>
+                            <input type="number" class="form-input" id="configThreshold" step="0.01" min="0" max="1" placeholder="0.95">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">模型路径</label>
+                            <input type="text" class="form-input" id="configModelPath" placeholder="/path/to/model.pkl">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="window.saveConfig();">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                    <button class="btn btn-primary" onclick="window.loadConfig();">
+                        <i class="fas fa-sync-alt"></i> 重新加载
+                    </button>
+                    <button class="btn btn-warning" onclick="window.reloadConfigBackend();">
+                        <i class="fas fa-redo"></i> 应用到后端
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js?v=apply_v1"></script>
+</body>
+</html>
