@@ -456,7 +456,7 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 | `data/` | - | 用户自备天文数据 |
 | `tdengine-fs/` | ~2GB | 使用 `apptainer build` 构建容器 |
 
-**联系方式**：如需预训练模型/部署相关问题，请联系 3023244355@tju.edu.cn。
+**联系方式**：如需测试数据/预训练模型/部署等相关问题，请联系 3023244355@tju.edu.cn。
 
 ---
 
