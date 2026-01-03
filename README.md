@@ -177,7 +177,22 @@ apptainer pull tdengine.sif docker://tdengine/tdengine:3.3.2.0
 apptainer build --sandbox tdengine-fs tdengine.sif
 ```
 
-### 4. 编辑配置文件
+### 4. 获取 TDengine 客户端库
+
+`libs/` 目录下的 TDengine 库文件需从官网获取：
+
+1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
+2. 下载 **TDengine 3.3.7.5** 版本（Linux amd64）
+3. 解压后将 `driver/libtaos.so*` 复制到 `libs/` 目录
+
+```bash
+# 示例
+wget https://www.taosdata.com/assets-download/3.0/TDengine-client-3.3.7.5-Linux-x64.tar.gz
+tar -xzf TDengine-client-3.3.7.5-Linux-x64.tar.gz
+cp TDengine-client-3.3.7.5/driver/libtaos.so* TDlight/libs/
+```
+
+### 5. 编辑配置文件
 
 ```bash
 cp config.json.example config.json
@@ -200,7 +215,7 @@ vim config.json
 }
 ```
 
-### 5. 编译 C++ 组件
+### 6. 编译 C++ 组件
 
 ```bash
 cd web
@@ -210,7 +225,7 @@ cd ../insert
 ./build.sh
 ```
 
-### 6. 启动服务
+### 7. 启动服务
 
 ```bash
 # 终端 1: 启动 TDengine 容器
@@ -225,7 +240,7 @@ export LD_LIBRARY_PATH=../libs:$LD_LIBRARY_PATH
 ./web_api
 ```
 
-### 7. 访问
+### 8. 访问
 
 打开浏览器访问：**http://localhost:5001**
 
@@ -428,21 +443,6 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 | `classifier/lgbm_111w_model.pkl` | ~250MB | 联系作者获取预训练模型 |
 | `data/` | - | 用户自备天文数据 |
 | `tdengine-fs/` | ~2GB | 使用 `apptainer build` 构建容器 |
-
-### TDengine 客户端库
-
-`libs/` 目录下的 TDengine 库文件需从官网获取：
-
-1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
-2. 下载 **TDengine 3.3.7.5** 版本（Linux amd64）
-3. 解压后将 `driver/libtaos.so*` 复制到 `libs/` 目录
-
-```bash
-# 示例
-wget https://www.taosdata.com/assets-download/3.0/TDengine-client-3.3.7.5-Linux-x64.tar.gz
-tar -xzf TDengine-client-3.3.7.5-Linux-x64.tar.gz
-cp TDengine-client-3.3.7.5/driver/libtaos.so* TDlight/libs/
-```
 
 **联系方式**：如需预训练模型/部署相关问题，请联系 3023244355@tju.edu.cn。
 
