@@ -84,7 +84,7 @@ double calculateMagError(double flux, double flux_error) {
     return 1.0857 * flux_error / flux;
 }
 
-// ==================== 阶段1：并行建表 ====================
+// ==================== Phase 1: Parallel Table Creation ====================
 void create_tables_worker(int thread_id, const vector<SubTable*>& tables, 
                           size_t start, size_t end, 
                           const string& db_name, const string& super_table,
@@ -93,7 +93,7 @@ void create_tables_worker(int thread_id, const vector<SubTable*>& tables,
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6041);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ 线程 " << thread_id << " 连接失败" << endl;
+        cerr << "❌ Thread " << thread_id << " connection failed" << endl;
         return;
     }
     
@@ -118,7 +118,7 @@ void create_tables_worker(int thread_id, const vector<SubTable*>& tables,
     taos_close(conn);
 }
 
-// ==================== 阶段2：STMT API 插入 ====================
+// ==================== Phase 2: STMT API Insertion ====================
 void insert_worker(int thread_id, const vector<SubTable*>& tables,
                    size_t start, size_t end,
                    const string& db_name, PerfStats& stats) {
@@ -126,7 +126,7 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6041);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ 线程 " << thread_id << " 连接失败" << endl;
+        cerr << "❌ Thread " << thread_id << " connection failed" << endl;
         return;
     }
     

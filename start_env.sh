@@ -1,46 +1,46 @@
 #!/bin/bash
-# 进入 TDlight 运行环境
+# Enter TDlight runtime environment
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-# 检查 Conda 环境
+# Check Conda environment
 if [ -z "$CONDA_PREFIX" ]; then
-    echo "警告: 未检测到 Conda 环境，Python 分类功能可能不可用"
-    echo "建议: conda activate tdlight"
+    echo "Warning: Conda environment not detected, Python classification may not be available"
+    echo "Suggestion: conda activate tdlight"
 fi
 
-# 查找 apptainer
+# Find apptainer
 if command -v apptainer &> /dev/null; then
     APPTAINER="apptainer"
 elif command -v singularity &> /dev/null; then
     APPTAINER="singularity"
 else
-    echo "错误: 未找到 apptainer"
-    echo "安装: conda install -c conda-forge apptainer"
+    echo "Error: apptainer not found"
+    echo "Install: conda install -c conda-forge apptainer"
     exit 1
 fi
 
-# 查找容器
+# Find container
 CONTAINER=""
 if [ -d "$PROJECT_ROOT/tdengine-fs" ]; then
     CONTAINER="$PROJECT_ROOT/tdengine-fs"
 elif [ -n "$TDLIGHT_CONTAINER" ]; then
     CONTAINER="$TDLIGHT_CONTAINER"
 else
-    echo "错误: 未找到容器目录 tdengine-fs/"
+    echo "Error: Container directory tdengine-fs/ not found"
     exit 1
 fi
 
-echo "项目: $PROJECT_ROOT"
-echo "容器: $CONTAINER"
+echo "Project: $PROJECT_ROOT"
+echo "Container: $CONTAINER"
 [ -n "$CONDA_PREFIX" ] && echo "Conda: $CONDA_PREFIX"
 echo ""
 
-# 挂载选项
+# Mount options
 BIND_OPTS="--bind $PROJECT_ROOT:/app"
 BIND_OPTS="$BIND_OPTS --bind $PROJECT_ROOT/config/taos_cfg:/etc/taos"
 
-# 挂载 Conda 环境
+# Mount Conda environment
 if [ -n "$CONDA_PREFIX" ]; then
     BIND_OPTS="$BIND_OPTS --bind $CONDA_PREFIX:$CONDA_PREFIX"
 fi

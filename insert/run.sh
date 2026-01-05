@@ -1,17 +1,17 @@
 #!/bin/bash
-# TDengine 数据导入运行脚本
-# 用法: ./run.sh [lightcurve|catalog|sql] [参数...]
+# TDengine Data Import Run Script
+# Usage: ./run.sh [lightcurve|catalog|sql] [args...]
 
 set -e
 
-# ==================== 路径配置 ====================
+# ==================== Path Configuration ====================
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# 自动查找 apptainer（优先使用环境中的，否则使用系统的）
+# Auto-detect apptainer (prefer environment, fallback to system)
 APPTAINER_BIN="${APPTAINER_BIN:-$(which apptainer 2>/dev/null || echo apptainer)}"
 CONTAINER="${PROJECT_ROOT}/tdengine-fs"
 IMPORT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ==================== Apptainer 通用参数 ====================
+# ==================== Apptainer Common Options ====================
 APPTAINER_OPTS=(
     --bind "${PROJECT_ROOT}/runtime/taos_home/cfg:/etc/taos"
     --bind "${PROJECT_ROOT}/runtime:/app"
@@ -20,13 +20,13 @@ APPTAINER_OPTS=(
     --env "LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver"
 )
 
-# ==================== 命令分发 ====================
+# ==================== Command Dispatch ====================
 case "$1" in
     lightcurve)
-        # 光变曲线导入
-        # 用法: ./run.sh lightcurve [数据库名]
+        # Light curve import
+        # Usage: ./run.sh lightcurve [database_name]
         DB_NAME="${2:-lightcurve_db}"
-        echo "🚀 导入光变曲线到数据库: ${DB_NAME}"
+        echo "🚀 Importing light curves to database: ${DB_NAME}"
         ${APPTAINER_BIN} exec "${APPTAINER_OPTS[@]}" ${CONTAINER} \
             /app/src/IO/import/lightcurve_importer \
             /app/data/gaiadr2/individual_lightcurves \
@@ -34,10 +34,10 @@ case "$1" in
         ;;
     
     catalog)
-        # 星表导入
-        # 用法: ./run.sh catalog [数据库名]
+        # Catalog import
+        # Usage: ./run.sh catalog [database_name]
         DB_NAME="${2:-catalog_db}"
-        echo "🚀 导入星表到数据库: ${DB_NAME}"
+        echo "🚀 Importing catalog to database: ${DB_NAME}"
         ${APPTAINER_BIN} exec "${APPTAINER_OPTS[@]}" ${CONTAINER} \
             /app/src/IO/import/catalog_importer \
             --catalogs /app/data/catalogs_gaiadr2/catalogs \
@@ -46,11 +46,11 @@ case "$1" in
         ;;
     
     sql)
-        # 执行 SQL
-        # 用法: ./run.sh sql "SQL语句"
+        # Execute SQL
+        # Usage: ./run.sh sql "SQL statement"
         shift
         SQL="$*"
-        echo "📊 执行 SQL: ${SQL}"
+        echo "📊 Executing SQL: ${SQL}"
         ${APPTAINER_BIN} exec \
             --bind "${PROJECT_ROOT}/runtime/taos_home/cfg:/etc/taos" \
             ${CONTAINER} \
@@ -58,14 +58,14 @@ case "$1" in
         ;;
     
     shell)
-        # 进入容器 shell
-        echo "🐚 进入 TDengine 容器..."
+        # Enter container shell
+        echo "🐚 Entering TDengine container..."
         ${APPTAINER_BIN} shell "${APPTAINER_OPTS[@]}" ${CONTAINER}
         ;;
     
     compile)
-        # 编译导入程序
-        echo "🔧 编译导入程序..."
+        # Compile import programs
+        echo "🔧 Compiling import programs..."
         cd ${IMPORT_DIR}
         TAOS_DIR="${PROJECT_ROOT}/tdengine-fs/usr/local/taos"
         LIBS_DIR="${PROJECT_ROOT}/runtime/libs"
@@ -83,26 +83,25 @@ case "$1" in
             -ltaos -lhealpix_cxx -lpthread \
             -Wl,-rpath,${TAOS_DIR}/driver -Wl,-rpath,${LIBS_DIR}
         
-        echo "✅ 编译完成"
+        echo "✅ Compilation complete"
         ;;
     
     *)
-        echo "TDengine 数据导入工具"
+        echo "TDengine Data Import Tool"
         echo ""
-        echo "用法: $0 <命令> [参数]"
+        echo "Usage: $0 <command> [args]"
         echo ""
-        echo "命令:"
-        echo "  lightcurve [db]  导入光变曲线数据"
-        echo "  catalog [db]     导入星表数据"
-        echo "  sql \"SQL\"        执行 SQL 语句"
-        echo "  shell            进入容器 shell"
-        echo "  compile          编译导入程序"
+        echo "Commands:"
+        echo "  lightcurve [db]  Import light curve data"
+        echo "  catalog [db]     Import catalog data"
+        echo "  sql \"SQL\"        Execute SQL statement"
+        echo "  shell            Enter container shell"
+        echo "  compile          Compile import programs"
         echo ""
-        echo "示例:"
+        echo "Examples:"
         echo "  $0 lightcurve test_db"
         echo "  $0 catalog catalog_test"
         echo "  $0 sql \"SHOW DATABASES;\""
         echo "  $0 sql \"DROP DATABASE IF EXISTS test_db;\""
         ;;
 esac
-

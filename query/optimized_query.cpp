@@ -167,7 +167,7 @@ public:
             sql << " AND " << time_filter;
         }
         
-        // 添加 LIMIT
+        // Add LIMIT
         if (limit > 0) {
             sql << " LIMIT " << limit;
         }
@@ -181,7 +181,7 @@ public:
         // 3. Execute query
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
-            string error = "查询失败: " + string(taos_errstr(res));
+            string error = "Query failed: " + string(taos_errstr(res));
             taos_free_result(res);
             throw runtime_error(error);
         }
@@ -275,7 +275,7 @@ public:
         // Order by time
         sql << " ORDER BY ts ASC";
         
-        // 添加 LIMIT
+        // Add LIMIT
         if (limit > 0) {
             sql << " LIMIT " << limit;
         }
@@ -286,7 +286,7 @@ public:
         
         auto query_start = high_resolution_clock::now();
         
-        // 执行查询
+        // Execute query
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
             string error = "Query failed: " + string(taos_errstr(res));
@@ -481,7 +481,7 @@ void printUsage(const char* program) {
 
 int main(int argc, char* argv[]) {
     try {
-        // 默认参数
+        // Default parameters
         string mode;
         string db_name = "test_db";
         string host = "localhost";
