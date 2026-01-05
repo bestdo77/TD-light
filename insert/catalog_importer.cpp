@@ -1,7 +1,7 @@
 /*
- * 星表数据导入器 - 优化版本
- * 采用 STMT API + 直接分配 + 两阶段（先建表后插入）
- * 编译: g++ -std=c++17 -O3 -march=native catalog_importer.cpp -o catalog_importer -ltaos -lhealpix_cxx -lpthread
+ * Catalog Data Importer - Optimized Version
+ * Uses STMT API + Direct Assignment + Two-Phase (Create Tables First, Then Insert)
+ * Compile: g++ -std=c++17 -O3 -march=native catalog_importer.cpp -o catalog_importer -ltaos -lhealpix_cxx -lpthread
  */
 
 #include <iostream>
@@ -27,13 +27,13 @@ namespace fs = std::filesystem;
 using namespace std;
 using namespace std::chrono;
 
-// ==================== 配置参数 ====================
-constexpr int NUM_THREADS = 64;           // 并行线程数
-constexpr int NUM_VGROUPS = 128;          // 虚拟分组数
-constexpr int BATCH_SIZE = 10000;         // 每批次插入行数
-constexpr int BUFFER_SIZE = 256;          // 每vgroup内存缓冲(MB)
+// ==================== Configuration Parameters ====================
+constexpr int NUM_THREADS = 64;           // Number of parallel threads
+constexpr int NUM_VGROUPS = 128;          // Number of virtual groups
+constexpr int BATCH_SIZE = 10000;         // Rows per insert batch
+constexpr int BUFFER_SIZE = 256;          // Memory buffer per vgroup (MB)
 
-// 从环境变量读取 TDengine 主机地址
+// Read TDengine host address from environment variable
 string get_taos_host() {
     const char* env_host = getenv("TAOS_HOST");
     if (env_host != nullptr && strlen(env_host) > 0) {
@@ -43,22 +43,22 @@ string get_taos_host() {
 }
 
 struct Record {
-    int64_t ts_ms;           // 观测时间（毫秒时间戳）
-    string band;             // 波段
-    double mag;              // 星等
-    double flux;             // 流量
-    double flux_error;       // 流量误差
-    double mag_error;        // 星等误差
-    double jd_tcb;           // 儒略日
+    int64_t ts_ms;           // Observation time (millisecond timestamp)
+    string band;             // Band
+    double mag;              // Magnitude
+    double flux;             // Flux
+    double flux_error;       // Flux error
+    double mag_error;        // Magnitude error
+    double jd_tcb;           // Julian Date (TCB)
 };
 
 struct SubTable {
-    string table_name;       // 子表名 t_<source_id>
+    string table_name;       // Child table name t_<source_id>
     long healpix_id;         // HEALPix ID
-    long long source_id;     // 源ID
-    string cls;              // 分类标签（作为TAG）
-    double ra, dec;          // 坐标
-    vector<Record> records;  // 观测记录
+    long long source_id;     // Source ID
+    string cls;              // Classification label (as TAG)
+    double ra, dec;          // Coordinates
+    vector<Record> records;  // Observation records
 };
 
 struct PerfStats {
@@ -78,7 +78,7 @@ vector<string> split(const string& line, char delim) {
     return result;
 }
 
-// 计算星等误差
+// Calculate magnitude error
 double calculateMagError(double flux, double flux_error) {
     if (flux <= 0) return 0.01;
     return 1.0857 * flux_error / flux;
@@ -109,7 +109,7 @@ void create_tables_worker(int thread_id, const vector<SubTable*>& tables,
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
             lock_guard<mutex> lock(cout_mutex);
-            cerr << "❌ 建表失败 " << st->table_name << ": " << taos_errstr(res) << endl;
+            cerr << "[ERROR] Table creation failed " << st->table_name << ": " << taos_errstr(res) << endl;
         }
         taos_free_result(res);
         stats.tables_created++;
@@ -133,22 +133,22 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
     TAOS_STMT* stmt = taos_stmt_init(conn);
     if (!stmt) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ 线程 " << thread_id << " STMT初始化失败" << endl;
+        cerr << "[ERROR] Thread " << thread_id << " STMT initialization failed" << endl;
         taos_close(conn);
         return;
     }
     
-    // 准备 STMT
+    // Prepare STMT
     const char* sql = "INSERT INTO ? VALUES(?,?,?,?,?,?,?)";
     if (taos_stmt_prepare(stmt, sql, strlen(sql)) != 0) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ STMT prepare 失败: " << taos_stmt_errstr(stmt) << endl;
+        cerr << "[ERROR] STMT prepare failed: " << taos_stmt_errstr(stmt) << endl;
         taos_stmt_close(stmt);
         taos_close(conn);
         return;
     }
     
-    // 分配缓冲区
+    // Allocate buffers
     vector<int64_t> ts_buf(BATCH_SIZE);
     vector<char> band_buf(BATCH_SIZE * 17);  // NCHAR(16) + null
     vector<int32_t> band_len(BATCH_SIZE);
@@ -162,10 +162,10 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
         const SubTable* st = tables[i];
         if (st->records.empty()) continue;
         
-        // 设置表名
+        // Set table name
         if (taos_stmt_set_tbname(stmt, st->table_name.c_str()) != 0) {
             lock_guard<mutex> lock(cout_mutex);
-            cerr << "❌ 设置表名失败 " << st->table_name << ": " << taos_stmt_errstr(stmt) << endl;
+            cerr << "[ERROR] Set table name failed " << st->table_name << ": " << taos_stmt_errstr(stmt) << endl;
             continue;
         }
         
@@ -174,12 +174,12 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
             size_t batch_end = min(batch_start + BATCH_SIZE, total);
             int batch_count = batch_end - batch_start;
             
-            // 填充缓冲区
+            // Fill buffers
             for (int j = 0; j < batch_count; ++j) {
                 const Record& r = st->records[batch_start + j];
                 ts_buf[j] = r.ts_ms;
                 
-                // 处理 band 字符串
+                // Process band string
                 memset(&band_buf[j * 17], 0, 17);
                 strncpy(&band_buf[j * 17], r.band.c_str(), 16);
                 band_len[j] = r.band.length();
@@ -191,7 +191,7 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
                 jd_buf[j] = r.jd_tcb;
             }
             
-            // 绑定参数
+            // Bind parameters
             TAOS_MULTI_BIND binds[7];
             memset(binds, 0, sizeof(binds));
             
@@ -253,19 +253,19 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
             
             if (taos_stmt_bind_param_batch(stmt, binds) != 0) {
                 lock_guard<mutex> lock(cout_mutex);
-                cerr << "❌ 绑定参数失败: " << taos_stmt_errstr(stmt) << endl;
+                cerr << "[ERROR] Bind parameters failed: " << taos_stmt_errstr(stmt) << endl;
                 continue;
             }
             
             if (taos_stmt_add_batch(stmt) != 0) {
                 lock_guard<mutex> lock(cout_mutex);
-                cerr << "❌ 添加批次失败: " << taos_stmt_errstr(stmt) << endl;
+                cerr << "[ERROR] Add batch failed: " << taos_stmt_errstr(stmt) << endl;
                 continue;
             }
             
             if (taos_stmt_execute(stmt) != 0) {
                 lock_guard<mutex> lock(cout_mutex);
-                cerr << "❌ 执行失败: " << taos_stmt_errstr(stmt) << endl;
+                cerr << "[ERROR] Execute failed: " << taos_stmt_errstr(stmt) << endl;
                 continue;
             }
             
@@ -294,52 +294,52 @@ int main(int argc, char* argv[]) {
     }
     
     if (catalog_dir.empty() || coords_file.empty()) {
-        cout << "用法: " << argv[0] << " --catalogs <dir> --coords <file> [选项]" << endl;
-        cout << "\n选项:" << endl;
-        cout << "  --db <name>         数据库名称 (默认: catalog_database)" << endl;
-        cout << "  --nside <N>         HEALPix NSIDE (默认: 64)" << endl;
+        cout << "Usage: " << argv[0] << " --catalogs <dir> --coords <file> [options]" << endl;
+        cout << "\nOptions:" << endl;
+        cout << "  --db <name>         Database name (default: catalog_database)" << endl;
+        cout << "  --nside <N>         HEALPix NSIDE (default: 64)" << endl;
         return 1;
     }
     
-    cout << "\n🚀 星表数据导入器 (优化版本)" << endl;
+    cout << "\n=== Catalog Data Importer (Optimized) ===" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << " 星表目录: " << catalog_dir << endl;
-    cout << " 坐标文件: " << coords_file << endl;
-    cout << " 数据库: " << db_name << endl;
-    cout << " 线程数: " << NUM_THREADS << endl;
+    cout << " Catalog directory: " << catalog_dir << endl;
+    cout << " Coordinates file: " << coords_file << endl;
+    cout << " Database: " << db_name << endl;
+    cout << " Threads: " << NUM_THREADS << endl;
     cout << " vgroups: " << NUM_VGROUPS << endl;
-    cout << " 批量大小: " << BATCH_SIZE << " 条/批" << endl;
+    cout << " Batch size: " << BATCH_SIZE << " rows/batch" << endl;
     cout << " HEALPix NSIDE: " << nside << endl;
-    cout << " 策略: STMT API + 直接分配 + 两阶段" << endl;
+    cout << " Strategy: STMT API + Direct Assignment + Two-Phase" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
     PerfStats stats;
     auto total_start = high_resolution_clock::now();
     
-    // 从可执行文件路径推导配置目录（支持从任意工作目录启动）
+    // Derive config directory from executable path (supports launching from any working directory)
     string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
     string taos_cfg_dir = exe_path + "/../runtime/taos_home/cfg";
     if (!fs::exists(taos_cfg_dir)) {
-        // 回退：尝试当前目录
+        // Fallback: try current directory
         taos_cfg_dir = fs::current_path().string() + "/taos_home/cfg";
     }
     if (fs::exists(taos_cfg_dir)) {
         taos_options(TSDB_OPTION_CONFIGDIR, taos_cfg_dir.c_str());
     }
     
-    // 初始化 TDengine
+    // Initialize TDengine
     taos_init();
     
-    // 连接数据库
+    // Connect to database
     string taos_host = get_taos_host();
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", NULL, 6041);
     if (!conn) {
-        cerr << "❌ 连接失败 (host: " << taos_host << ")" << endl;
+        cerr << "[ERROR] Connection failed (host: " << taos_host << ")" << endl;
         taos_cleanup();
         return 1;
     }
     
-    // 创建数据库（指定 vgroups）
+    // Create database (specify vgroups)
     stringstream create_db_sql;
     create_db_sql << "CREATE DATABASE IF NOT EXISTS " << db_name 
                   << " VGROUPS " << NUM_VGROUPS 
@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
                   << " KEEP 36500";
     TAOS_RES* res = taos_query(conn, create_db_sql.str().c_str());
     if (taos_errno(res) != 0) {
-        cerr << "❌ 创建数据库失败: " << taos_errstr(res) << endl;
+        cerr << "[ERROR] Create database failed: " << taos_errstr(res) << endl;
         taos_free_result(res);
         taos_close(conn);
         taos_cleanup();
@@ -358,14 +358,14 @@ int main(int argc, char* argv[]) {
     string use_db = "USE " + db_name + ";";
     taos_query(conn, use_db.c_str());
     
-    // 创建超级表
+    // Create super table
     string create_stable = "CREATE STABLE IF NOT EXISTS " + super_table + 
         " (ts TIMESTAMP, band NCHAR(16), "
         "mag DOUBLE, mag_error DOUBLE, flux DOUBLE, flux_error DOUBLE, jd_tcb DOUBLE) "
         "TAGS (healpix_id BIGINT, source_id BIGINT, ra DOUBLE, dec DOUBLE, cls NCHAR(32));";
     res = taos_query(conn, create_stable.c_str());
     if (taos_errno(res) != 0 && taos_errno(res) != 0x80002603) {
-        cerr << "❌ 创建超级表失败: " << taos_errstr(res) << endl;
+        cerr << "[ERROR] Create super table failed: " << taos_errstr(res) << endl;
         taos_free_result(res);
         taos_close(conn);
         taos_cleanup();
@@ -373,26 +373,26 @@ int main(int argc, char* argv[]) {
     }
     taos_free_result(res);
     
-    cout << "✅ 数据库和超级表已就绪 (vgroups=" << NUM_VGROUPS << ")" << endl;
+    cout << "[OK] Database and super table ready (vgroups=" << NUM_VGROUPS << ")" << endl;
     taos_close(conn);
     
-    // 初始化 HEALPix
+    // Initialize HEALPix
     Healpix_Base hp(nside, NEST, SET_NSIDE);
     
-    // ==================== 读取坐标文件 ====================
-    cout << "\n📖 读取坐标文件..." << endl;
+    // ==================== Read Coordinates File ====================
+    cout << "\n[INFO] Reading coordinates file..." << endl;
     auto coord_start = high_resolution_clock::now();
     
     unordered_map<long long, pair<double, double>> coords_map;
     ifstream coord_file(coords_file);
     if (!coord_file.is_open()) {
-        cerr << "❌ 无法打开坐标文件: " << coords_file << endl;
+        cerr << "[ERROR] Cannot open coordinates file: " << coords_file << endl;
         taos_cleanup();
         return 1;
     }
     
     string line;
-    getline(coord_file, line);  // 跳过表头
+    getline(coord_file, line);  // Skip header
     while (getline(coord_file, line)) {
         auto parts = split(line, ',');
         if (parts.size() >= 3) {
@@ -406,10 +406,10 @@ int main(int argc, char* argv[]) {
     
     auto coord_end = high_resolution_clock::now();
     double coord_time = duration_cast<milliseconds>(coord_end - coord_start).count() / 1000.0;
-    cout << "  ✅ 读取 " << coords_map.size() << " 个源的坐标 (" << fixed << setprecision(2) << coord_time << "s)" << endl;
+    cout << "  [OK] Read " << coords_map.size() << " source coordinates (" << fixed << setprecision(2) << coord_time << "s)" << endl;
     
-    // ==================== 读取星表文件 ====================
-    cout << "\n📖 读取星表文件..." << endl;
+    // ==================== Read Catalog Files ====================
+    cout << "\n[INFO] Reading catalog files..." << endl;
     auto catalog_start = high_resolution_clock::now();
     
     vector<string> catalog_files;
@@ -421,16 +421,16 @@ int main(int argc, char* argv[]) {
     }
     sort(catalog_files.begin(), catalog_files.end());
     
-    cout << "  📁 找到 " << catalog_files.size() << " 个星表文件" << endl;
+    cout << "  [INFO] Found " << catalog_files.size() << " catalog files" << endl;
     
-    // 收集每个源的数据
+    // Collect data for each source
     map<long long, SubTable*> source_data;
     
     for (const auto& catalog_file : catalog_files) {
         ifstream file(catalog_file);
         if (!file.is_open()) continue;
         
-        getline(file, line);  // 跳过表头
+        getline(file, line);  // Skip header
         
         while (getline(file, line)) {
             auto parts = split(line, ',');
@@ -447,7 +447,7 @@ int main(int argc, char* argv[]) {
                 st->ra = coords_map[source_id].first;
                 st->dec = coords_map[source_id].second;
                 
-                // 计算 HEALPix ID
+                // Calculate HEALPix ID
                 double theta = (90.0 - st->dec) * M_PI / 180.0;
                 double phi = st->ra * M_PI / 180.0;
                 pointing pt(theta, phi);
@@ -478,18 +478,18 @@ int main(int argc, char* argv[]) {
     
     auto catalog_end = high_resolution_clock::now();
     double catalog_time = duration_cast<milliseconds>(catalog_end - catalog_start).count() / 1000.0;
-    cout << "  ✅ 读取 " << source_data.size() << " 个源，共 " 
-         << stats.total_records << " 条记录 (" << catalog_time << "s)" << endl;
+    cout << "  [OK] Read " << source_data.size() << " sources, " 
+         << stats.total_records << " records total (" << catalog_time << "s)" << endl;
     
-    // 转换为 vector 便于分配
+    // Convert to vector for distribution
     vector<SubTable*> tables;
     tables.reserve(source_data.size());
     for (auto& pair : source_data) {
         tables.push_back(pair.second);
     }
     
-    // ==================== 阶段1：并行建表 ====================
-    cout << "\n🏗️  [阶段1] 并行建表 (" << NUM_THREADS << " 线程)..." << endl;
+    // ==================== Phase 1: Parallel Table Creation ====================
+    cout << "\n[PHASE 1] Parallel table creation (" << NUM_THREADS << " threads)..." << endl;
     auto create_start = high_resolution_clock::now();
     
     vector<thread> workers;
@@ -509,10 +509,10 @@ int main(int argc, char* argv[]) {
     
     auto create_end = high_resolution_clock::now();
     double create_time = duration_cast<milliseconds>(create_end - create_start).count() / 1000.0;
-    cout << "  ✅ 创建 " << stats.tables_created << " 张表 (" << create_time << "s)" << endl;
+    cout << "  [OK] Created " << stats.tables_created << " tables (" << create_time << "s)" << endl;
     
-    // ==================== 阶段2：STMT API 插入 ====================
-    cout << "\n⚡ [阶段2] STMT API 插入 (" << NUM_THREADS << " 线程)..." << endl;
+    // ==================== Phase 2: STMT API Insert ====================
+    cout << "\n[PHASE 2] STMT API insert (" << NUM_THREADS << " threads)..." << endl;
     auto insert_start = high_resolution_clock::now();
     
     for (int i = 0; i < NUM_THREADS; ++i) {
@@ -524,11 +524,11 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // 监控进度
+    // Monitor progress
     thread monitor([&]() {
         auto monitor_start = high_resolution_clock::now();
         while (stats.table_count < (int)tables.size()) {
-            // 检查停止信号
+            // Check for stop signal
             ifstream stop_file("/tmp/import_stop");
             if (stop_file.is_open()) {
                 stop_file.close();
@@ -545,7 +545,7 @@ int main(int argc, char* argv[]) {
             
             double pct = (double)stats.table_count / tables.size() * 100.0;
             
-            // 输出进度 JSON
+            // Output progress JSON
             {
                 ofstream f("/tmp/import_progress.json");
                 f << "{\"percent\":" << (int)pct
@@ -560,12 +560,12 @@ int main(int argc, char* argv[]) {
                 f.close();
             }
             
-            cout << "\r  📊 进度: " << stats.table_count << "/" << tables.size() 
-                 << " 表 | 行: " << stats.inserted_records 
-                 << " | 速度: " << fixed << setprecision(0) << speed << " 行/秒" << flush;
+            cout << "\r  [PROGRESS] " << stats.table_count << "/" << tables.size() 
+                 << " tables | Rows: " << stats.inserted_records 
+                 << " | Speed: " << fixed << setprecision(0) << speed << " rows/s" << flush;
         }
         
-        // 完成时写入 100%
+        // Write 100% when complete
         auto now = high_resolution_clock::now();
         double elapsed = duration_cast<milliseconds>(now - monitor_start).count() / 1000.0;
         ofstream f("/tmp/import_progress.json");
@@ -588,28 +588,28 @@ int main(int argc, char* argv[]) {
     auto total_end = high_resolution_clock::now();
     double total_time = duration_cast<milliseconds>(total_end - total_start).count() / 1000.0;
     
-    // ==================== 性能报告 ====================
+    // ==================== Performance Report ====================
     cout << "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "📊 星表导入性能报告 (优化版本)" << endl;
+    cout << "[REPORT] Catalog Import Performance (Optimized)" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     cout << fixed << setprecision(2);
-    cout << "📖 数据读取:         " << (coord_time + catalog_time) << " 秒" << endl;
-    cout << "🏗️  建表耗时:         " << create_time << " 秒" << endl;
-    cout << "💾 插入耗时:         " << insert_time << " 秒" << endl;
-    cout << "⏱️  总耗时:           " << total_time << " 秒" << endl;
+    cout << "[TIME] Data reading:    " << (coord_time + catalog_time) << " s" << endl;
+    cout << "[TIME] Table creation:  " << create_time << " s" << endl;
+    cout << "[TIME] Data insertion:  " << insert_time << " s" << endl;
+    cout << "[TIME] Total:           " << total_time << " s" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "📊 数据统计:" << endl;
-    cout << "  • 表数量:           " << stats.table_count << endl;
-    cout << "  • 总记录数:         " << stats.total_records << endl;
-    cout << "  • 成功插入:         " << stats.inserted_records << endl;
-    cout << "  • 总速率:           " << setprecision(0) << (stats.inserted_records / total_time) << " 行/秒" << endl;
-    cout << "  • 纯插入速率:       " << setprecision(0) << (stats.inserted_records / insert_time) << " 行/秒" << endl;
+    cout << "[STATS] Data statistics:" << endl;
+    cout << "  - Table count:       " << stats.table_count << endl;
+    cout << "  - Total records:     " << stats.total_records << endl;
+    cout << "  - Successfully inserted: " << stats.inserted_records << endl;
+    cout << "  - Overall rate:      " << setprecision(0) << (stats.inserted_records / total_time) << " rows/s" << endl;
+    cout << "  - Insert rate:       " << setprecision(0) << (stats.inserted_records / insert_time) << " rows/s" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     
-    // 清理
+    // Cleanup
     for (auto* st : tables) delete st;
     taos_cleanup();
     
-    cout << "\n✅ 星表导入完成！" << endl;
+    cout << "\n[OK] Catalog import complete!" << endl;
     return 0;
 }

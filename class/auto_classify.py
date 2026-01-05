@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-自动分类流水线 - 分批处理导入时检测到的候选光变曲线
-支持：
-- 分批处理（每批5000条）
-- 断点续传
-- 后台运行
-- 进度报告
+Auto-classification Pipeline - Batch process candidate light curves detected during import
+Features:
+- Batch processing (5000 per batch)
+- Checkpoint resume
+- Background execution
+- Progress reporting
 """
 
 import os
@@ -25,13 +25,13 @@ from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
-# ==================== 配置 ====================
+# ==================== Configuration ====================
 CONFIG_FILE = "../config.json"
 PROGRESS_FILE = "/tmp/auto_classify_progress.json"
 STATE_FILE = "/tmp/auto_classify_state.json"
 STOP_FILE = "/tmp/auto_classify_stop"
 
-# 默认配置
+# Default configuration
 DB_HOST = "localhost"
 DB_PORT = 6041
 DB_NAME = "gaiadr2_lc"
@@ -41,7 +41,7 @@ CONFIDENCE_THRESHOLD = 0.95
 UPDATE_DATABASE = True
 BATCH_SIZE = 5000
 
-# 特征列表
+# Feature list
 SELECTED_FEATURES = [
     'PeriodLS', 'Mean', 'Rcs', 'Psi_eta', 'StetsonK_AC',
     'Gskew', 'Psi_CS', 'Skew', 'Freq1_harmonics_amplitude_1', 'Eta_e',
@@ -52,7 +52,7 @@ ALL_CLASSES = ['Non-var', 'ROT', 'EA', 'EW', 'CEP', 'DSCT', 'RRAB', 'RRC', 'M', 
 
 
 def load_config():
-    """加载配置文件"""
+    """Load configuration file"""
     global DB_HOST, DB_PORT, DB_NAME, MODEL_PATH, METADATA_PATH, CONFIDENCE_THRESHOLD, UPDATE_DATABASE
     
     if not os.path.exists(CONFIG_FILE):
@@ -83,7 +83,7 @@ load_config()
 
 
 def update_progress(percent, message, status="running", batch_info=None):
-    """更新进度文件"""
+    """Update progress file"""
     try:
         data = {
             "percent": percent,
@@ -105,7 +105,7 @@ def update_progress(percent, message, status="running", batch_info=None):
 
 
 def save_state(state):
-    """保存状态（用于断点续传）"""
+    """Save state (for checkpoint resume)"""
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -114,7 +114,7 @@ def save_state(state):
 
 
 def load_state():
-    """加载上次的状态"""
+    """Load previous state"""
     try:
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
@@ -125,7 +125,7 @@ def load_state():
 
 
 def clear_state():
-    """清除状态文件"""
+    """Clear state file"""
     try:
         if os.path.exists(STATE_FILE):
             os.remove(STATE_FILE)
@@ -134,14 +134,14 @@ def clear_state():
 
 
 def check_stop():
-    """检查是否需要停止"""
+    """Check if stop requested"""
     if os.path.exists(STOP_FILE):
         return True
     return False
 
 
 class TDengineClient:
-    """TDengine 原生客户端"""
+    """TDengine native client"""
     def __init__(self, host, port, user="root", password="taosdata", db_name=None):
         self.host = host
         self.port = port
@@ -190,7 +190,7 @@ class TDengineClient:
 
 
 def fetch_lightcurve(client, source_id):
-    """获取光变曲线数据"""
+    """Fetch light curve data"""
     sql = f"SELECT ts, mag, mag_error FROM {client.db_name}.sensor_data WHERE source_id = {source_id} ORDER BY ts ASC"
     rows = client.query(sql)
     
@@ -216,7 +216,7 @@ def fetch_lightcurve(client, source_id):
 
 
 def extract_features(fs, t, mag, err):
-    """提取特征"""
+    """Extract features"""
     try:
         if len(t) < 5:
             return None
@@ -237,7 +237,7 @@ def extract_features(fs, t, mag, err):
 
 
 def update_class_in_db(client, source_id, new_class, healpix_id=None):
-    """更新数据库中的分类结果"""
+    """Update classification result in database"""
     table_name = ""
     if healpix_id is not None and int(healpix_id) != 0:
         table_name = f"sensor_data_{healpix_id}_{source_id}"
@@ -259,7 +259,7 @@ def update_class_in_db(client, source_id, new_class, healpix_id=None):
 
 
 def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_batches, threshold):
-    """处理一批候选"""
+    """Process a batch of candidates"""
     results = []
     total = len(candidates)
     updated_count = 0
@@ -273,19 +273,19 @@ def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_
         ra = cand.get('ra', 0)
         dec = cand.get('dec', 0)
         
-        # 获取光变曲线
+        # Fetch light curve
         lc_data = fetch_lightcurve(client, source_id)
         if lc_data is None:
             continue
         
         t, mag, err = lc_data
         
-        # 提取特征
+        # Extract features
         feats = extract_features(fs, t, mag, err)
         if feats is None:
             continue
         
-        # 分类
+        # Classify
         feats_arr = np.array(feats).reshape(1, -1)
         probs = model.predict_proba(feats_arr)[0]
         max_idx = np.argmax(probs)
@@ -306,7 +306,7 @@ def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_
             'updated': False
         }
         
-        # 高置信度时更新数据库
+        # Update database for high confidence predictions
         if confidence >= threshold and UPDATE_DATABASE:
             if update_class_in_db(client, source_id, pred_class, healpix_id):
                 result['updated'] = True
@@ -314,12 +314,12 @@ def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_
         
         results.append(result)
         
-        # 更新进度
+        # Update progress
         batch_progress = (i + 1) / total
         overall_progress = ((batch_idx - 1) + batch_progress) / total_batches * 100
         update_progress(
             int(overall_progress),
-            f"批次 {batch_idx}/{total_batches}: 处理 {i+1}/{total}",
+            f"Batch {batch_idx}/{total_batches}: Processing {i+1}/{total}",
             "running",
             {
                 "current_batch": batch_idx,
@@ -335,23 +335,23 @@ def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_
 
 
 def run_auto_classify(candidate_file, db_name, threshold, resume=False):
-    """运行自动分类"""
-    update_progress(0, "初始化中...", "running")
+    """Run auto-classification"""
+    update_progress(0, "Initializing...", "running")
     
-    # 检查候选文件
+    # Check candidate file
     if not os.path.exists(candidate_file):
-        update_progress(0, "候选文件不存在", "error")
+        update_progress(0, "Candidate file not found", "error")
         return 1
     
-    # 加载模型
-    update_progress(1, "加载模型...", "running")
+    # Load model
+    update_progress(1, "Loading model...", "running")
     if not os.path.exists(MODEL_PATH):
-        update_progress(0, "模型文件不存在", "error")
+        update_progress(0, "Model file not found", "error")
         return 1
     
     model = joblib.load(MODEL_PATH)
     
-    # 加载类别映射
+    # Load class mapping
     model_dir = os.path.dirname(MODEL_PATH)
     metadata_path = os.path.join(model_dir, 'metadata.pkl')
     if os.path.exists(metadata_path):
@@ -362,32 +362,32 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
     else:
         idx_to_class = {i: c for i, c in enumerate(ALL_CLASSES)}
     
-    # 初始化特征提取器
-    update_progress(2, "初始化特征提取器...", "running")
+    # Initialize feature extractor
+    update_progress(2, "Initializing feature extractor...", "running")
     fs = feets.FeatureSpace(data=['time', 'magnitude', 'error'], only=SELECTED_FEATURES)
     
-    # 读取候选列表
-    update_progress(3, "读取候选列表...", "running")
+    # Read candidate list
+    update_progress(3, "Reading candidate list...", "running")
     try:
         df = pd.read_csv(candidate_file)
         candidates = df.to_dict('records')
     except Exception as e:
-        update_progress(0, f"读取候选文件失败: {e}", "error")
+        update_progress(0, f"Failed to read candidate file: {e}", "error")
         return 1
     
     if not candidates:
-        update_progress(100, "没有候选需要处理", "completed")
+        update_progress(100, "No candidates to process", "completed")
         return 0
     
     total_candidates = len(candidates)
-    print(f"[INFO] 共 {total_candidates} 个候选待分类")
+    print(f"[INFO] Total {total_candidates} candidates to classify")
     
-    # 分批
+    # Split into batches
     batches = [candidates[i:i+BATCH_SIZE] for i in range(0, total_candidates, BATCH_SIZE)]
     total_batches = len(batches)
-    print(f"[INFO] 分为 {total_batches} 批，每批最多 {BATCH_SIZE} 个")
+    print(f"[INFO] Split into {total_batches} batches, max {BATCH_SIZE} per batch")
     
-    # 检查是否需要恢复
+    # Check if resume needed
     start_batch = 0
     all_results = []
     
@@ -396,16 +396,16 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
         if state and state.get('candidate_file') == candidate_file:
             start_batch = state.get('completed_batch', 0)
             all_results = state.get('results', [])
-            print(f"[INFO] 从批次 {start_batch + 1} 恢复")
+            print(f"[INFO] Resuming from batch {start_batch + 1}")
     
-    # 连接数据库
-    update_progress(5, "连接数据库...", "running")
+    # Connect to database
+    update_progress(5, "Connecting to database...", "running")
     client = TDengineClient(DB_HOST, DB_PORT, db_name=db_name)
     if not client.connect():
-        update_progress(0, "数据库连接失败", "error")
+        update_progress(0, "Database connection failed", "error")
         return 1
     
-    # 处理每一批
+    # Process each batch
     total_updated = 0
     stopped = False
     
@@ -415,7 +415,7 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
             break
         
         batch = batches[batch_idx]
-        print(f"[INFO] 处理批次 {batch_idx + 1}/{total_batches} ({len(batch)} 个)")
+        print(f"[INFO] Processing batch {batch_idx + 1}/{total_batches} ({len(batch)} items)")
         
         results, updated, should_stop = process_batch(
             client, fs, model, idx_to_class, batch,
@@ -425,7 +425,7 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
         all_results.extend(results)
         total_updated += updated
         
-        # 保存状态（断点续传）
+        # Save state (for checkpoint resume)
         save_state({
             'candidate_file': candidate_file,
             'completed_batch': batch_idx + 1,
@@ -439,7 +439,7 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
     
     client.close()
     
-    # 保存结果
+    # Save results
     result_file = candidate_file.replace('.csv', '_results.json')
     output_data = {
         "results": all_results,
@@ -454,10 +454,10 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
     with open(result_file, 'w') as f:
         json.dump(output_data, f, indent=2)
     
-    # 如果完成，清空候选文件并删除状态
+    # If completed, clear candidate file and remove state
     if not stopped:
         clear_state()
-        # 清空候选文件（保留表头）
+        # Clear candidate file (keep header)
         try:
             with open(candidate_file, 'r') as f:
                 header = f.readline()
@@ -466,15 +466,15 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
         except:
             pass
         
-        update_progress(100, f"完成: {len(all_results)} 个分类, {total_updated} 个更新", "completed")
-        print(f"[INFO] 完成: {len(all_results)} 个分类, {total_updated} 个更新")
+        update_progress(100, f"Done: {len(all_results)} classified, {total_updated} updated", "completed")
+        print(f"[INFO] Done: {len(all_results)} classified, {total_updated} updated")
     else:
         update_progress(
             int((batch_idx + 1) / total_batches * 100),
-            f"已暂停: 完成 {batch_idx + 1}/{total_batches} 批",
+            f"Paused: Completed {batch_idx + 1}/{total_batches} batches",
             "paused"
         )
-        print(f"[INFO] 已暂停: 完成 {batch_idx + 1}/{total_batches} 批")
+        print(f"[INFO] Paused: Completed {batch_idx + 1}/{total_batches} batches")
     
     return 0
 
@@ -482,18 +482,18 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
 def main():
     global BATCH_SIZE
     
-    parser = argparse.ArgumentParser(description='自动分类流水线')
-    parser.add_argument('--candidate-file', required=True, help='候选文件路径')
-    parser.add_argument('--db', default=DB_NAME, help='数据库名')
-    parser.add_argument('--threshold', type=float, default=CONFIDENCE_THRESHOLD, help='置信度阈值')
-    parser.add_argument('--resume', action='store_true', help='从上次中断处恢复')
-    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help='每批处理数量')
+    parser = argparse.ArgumentParser(description='Auto-classification Pipeline')
+    parser.add_argument('--candidate-file', required=True, help='Candidate file path')
+    parser.add_argument('--db', default=DB_NAME, help='Database name')
+    parser.add_argument('--threshold', type=float, default=CONFIDENCE_THRESHOLD, help='Confidence threshold')
+    parser.add_argument('--resume', action='store_true', help='Resume from last checkpoint')
+    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help='Batch size')
     
     args = parser.parse_args()
     
     BATCH_SIZE = args.batch_size
     
-    # 清除停止信号
+    # Clear stop signal
     if os.path.exists(STOP_FILE):
         os.remove(STOP_FILE)
     

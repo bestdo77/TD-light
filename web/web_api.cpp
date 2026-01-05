@@ -236,12 +236,12 @@ string TO_CLASSIFY_FILE = "../data/to_classify.txt";
 string TO_REVIEW_FILE = "../data/to_review.txt";
 string VALUABLE_FILE = "../data/valuable.txt";
 
-// 自动分类相关文件路径
+// Auto-classification related file paths
 string get_auto_classify_candidate_file(const string& db_name) {
     return "../data/auto_classify_queue_" + db_name + ".csv";
 }
 
-// 运行候选检测程序
+// Run candidate detection program
 int run_check_candidates(const string& db_name) {
     string cmd = "../insert/check_candidates --db " + db_name + " > /tmp/check_candidates.log 2>&1";
     return system(cmd.c_str());
@@ -370,7 +370,7 @@ bool connect_to_database() {
         conn = nullptr;
     }
     
-    // 尝试连接配置的数据库
+    // Try connecting to configured database
     if (!config.db_name.empty()) {
         conn = taos_connect(config.db_host.c_str(), config.db_user.c_str(), 
                             config.db_password.c_str(), config.db_name.c_str(), config.db_port);
@@ -381,7 +381,7 @@ bool connect_to_database() {
             cerr << "[WARN] Failed to connect to database '" << config.db_name << "': " << taos_errstr(conn) << endl;
         }
         
-        // 尝试不指定数据库连接
+        // Try connecting without specifying database
         conn = taos_connect(config.db_host.c_str(), config.db_user.c_str(), 
                             config.db_password.c_str(), NULL, config.db_port);
         
@@ -1123,7 +1123,7 @@ string handle_request(const string& request) {
     else if (path == "/api/classify_status") {
         string progress_path = "/tmp/class_progress.json";
         ifstream file(progress_path);
-        string json_response = "{\"percent\":0, \"message\":\"等待中...\", \"step\":\"\"}";
+        string json_response = "{\"percent\":0, \"message\":\"Waiting...\", \"step\":\"\"}";
         if (file.is_open()) {
             stringstream ss;
             ss << file.rdbuf();
@@ -1386,7 +1386,7 @@ string handle_request(const string& request) {
                "\r\n" + json_result;
     }
     
-    // ========== Config Management API ==========
+    // ========== Configuration Management API ==========
     else if (path == "/api/config" && method == "GET") {
         string json = config_to_json();
         return "HTTP/1.1 200 OK\r\n"
@@ -1424,10 +1424,10 @@ string handle_request(const string& request) {
                "\r\n" + result;
     }
     else if (path == "/api/config/reload") {
-        // 重新加载配置
+        // Reload configuration
         load_config();
         
-        // 重新连接数据库
+        // Reconnect to database
         if (conn) {
             taos_close(conn);
             conn = nullptr;
@@ -1441,7 +1441,7 @@ string handle_request(const string& request) {
                "Content-Length: " + to_string(result.length()) + "\r\n"
                "\r\n" + result;
     }
-    // ==================== 数据库管理 API ====================
+    // ==================== Database Management API ====================
     else if (path == "/api/database/drop" && method == "POST") {
         size_t body_pos = request.find("\r\n\r\n");
         string body = (body_pos != string::npos) ? request.substr(body_pos + 4) : "";
@@ -1456,7 +1456,7 @@ string handle_request(const string& request) {
                    "\r\n" + err;
         }
         
-        // 禁止删除系统库
+        // Prevent deletion of system databases
         if (db_name == "information_schema" || db_name == "performance_schema") {
             string err = "{\"success\":false,\"error\":\"Cannot drop system database\"}";
             return "HTTP/1.1 400 Bad Request\r\n"
@@ -1485,7 +1485,7 @@ string handle_request(const string& request) {
                "Content-Length: " + to_string(result.length()) + "\r\n"
                "\r\n" + result;
     }
-    // ==================== 数据导入 API ====================
+    // ==================== Data Import API ====================
     else if (path == "/api/import/start" && method == "POST") {
         size_t body_pos = request.find("\r\n\r\n");
         string body = (body_pos != string::npos) ? request.substr(body_pos + 4) : "";
@@ -1505,21 +1505,21 @@ string handle_request(const string& request) {
                    "\r\n" + err;
         }
         
-        // 停止之前的导入任务
+        // Stop previous import task
         system("pkill -9 -f 'catalog_importer' 2>/dev/null");
         system("pkill -9 -f 'lightcurve_importer' 2>/dev/null");
         remove("/tmp/import_progress.json");
         remove("/tmp/import.log");
         remove("/tmp/import_stop");
         
-        // 初始化进度文件
+        // Initialize progress file
         {
             ofstream progress("/tmp/import_progress.json");
             progress << "{\"percent\":0,\"message\":\"Starting import...\",\"status\":\"running\"}";
             progress.close();
         }
         
-        // 设置库路径，确保导入器能找到所有依赖
+        // Set library path to ensure importer can find all dependencies
         string libs_path = "../libs";
         string env_prefix = "LD_LIBRARY_PATH=" + libs_path + ":$LD_LIBRARY_PATH ";
         
@@ -1576,7 +1576,7 @@ string handle_request(const string& request) {
         // Explicitly update progress to stopped
         {
             ofstream progress("/tmp/import_progress.json");
-            progress << "{\"percent\":0,\"message\":\"已手动停止\",\"status\":\"stopped\"}";
+            progress << "{\"percent\":0,\"message\":\"Manually stopped\",\"status\":\"stopped\"}";
             progress.close();
         }
         
@@ -1588,27 +1588,27 @@ string handle_request(const string& request) {
                "\r\n" + result;
     }
     
-    // ==================== 自动分类 API ====================
-    // 触发候选检测
+    // ==================== Auto-classification API ====================
+    // Trigger candidate detection
     else if (path == "/api/auto_classify/check" && method == "POST") {
-        // 解析请求体获取数据库名
+        // Parse request body to get database name
         size_t body_pos = request.find("\r\n\r\n");
         string body = (body_pos != string::npos) ? request.substr(body_pos + 4) : "";
         string db_name = json_get_string(body, "db_name");
         if (db_name.empty()) db_name = config.db_name;
         
-        // 运行检测程序
+        // Run detection program
         int ret = run_check_candidates(db_name);
         
-        // 读取结果
+        // Read results
         string candidate_file = get_auto_classify_candidate_file(db_name);
         int count = count_candidates(candidate_file);
         
         string json;
         if (ret == 0) {
-            json = "{\"success\":true,\"count\":" + to_string(count) + ",\"message\":\"检测完成\",\"db_name\":\"" + db_name + "\"}";
+            json = "{\"success\":true,\"count\":" + to_string(count) + ",\"message\":\"Detection complete\",\"db_name\":\"" + db_name + "\"}";
         } else {
-            json = "{\"success\":false,\"count\":" + to_string(count) + ",\"error\":\"检测程序执行失败\",\"db_name\":\"" + db_name + "\"}";
+            json = "{\"success\":false,\"count\":" + to_string(count) + ",\"error\":\"Detection program failed\",\"db_name\":\"" + db_name + "\"}";
         }
         
         return "HTTP/1.1 200 OK\r\n"
@@ -1617,9 +1617,9 @@ string handle_request(const string& request) {
                "Content-Length: " + to_string(json.length()) + "\r\n"
                "\r\n" + json;
     }
-    // 获取当前候选数量（不触发检测）
+    // Get current candidate count (without triggering detection)
     else if (path == "/api/auto_classify/candidates") {
-        // 从 params 获取数据库名
+        // Get database name from params
         string db_name = config.db_name;
         if (params.find("db_name") != params.end() && !params["db_name"].empty()) {
             db_name = params["db_name"];
@@ -1636,11 +1636,11 @@ string handle_request(const string& request) {
                "\r\n" + json;
     }
     else if (path == "/api/auto_classify/start" && method == "POST") {
-        // 解析请求体
+        // Parse request body
         size_t body_pos = request.find("\r\n\r\n");
         string body = (body_pos != string::npos) ? request.substr(body_pos + 4) : "";
         
-        // 获取数据库名（优先用请求参数，否则用配置）
+        // Get database name (prefer request parameter, otherwise use config)
         string db_name = json_get_string(body, "db_name");
         if (db_name.empty()) db_name = config.db_name;
         
@@ -1648,7 +1648,7 @@ string handle_request(const string& request) {
         int count = count_candidates(candidate_file);
         
         if (count == 0) {
-            string err = "{\"success\":false,\"error\":\"队列为空，没有待分类的天体\",\"db_name\":\"" + db_name + "\"}";
+            string err = "{\"success\":false,\"error\":\"Queue is empty, no objects to classify\",\"db_name\":\"" + db_name + "\"}";
             return "HTTP/1.1 400 Bad Request\r\n"
                    "Content-Type: application/json\r\n"
                    "Access-Control-Allow-Origin: *\r\n"
@@ -1656,7 +1656,7 @@ string handle_request(const string& request) {
                    "\r\n" + err;
         }
         
-        // 停止之前的任务
+        // Stop previous task
         system("pkill -9 -f 'auto_classify.py' 2>/dev/null");
         remove("/tmp/auto_classify_progress.json");
         remove("/tmp/auto_classify_stop");
@@ -1664,14 +1664,14 @@ string handle_request(const string& request) {
         bool resume = json_get_bool(body, "resume", false);
         int batch_size = json_get_int(body, "batch_size", 5000);
         
-        // 初始化进度
+        // Initialize progress
         {
             ofstream progress("/tmp/auto_classify_progress.json");
-            progress << "{\"percent\":0,\"message\":\"启动中...\",\"status\":\"running\",\"db_name\":\"" << db_name << "\"}";
+            progress << "{\"percent\":0,\"message\":\"Starting...\",\"status\":\"running\",\"db_name\":\"" << db_name << "\"}";
             progress.close();
         }
         
-        // 启动自动分类任务
+        // Start auto-classification task
         string cmd = "nohup bash -c '"
                      "export LD_LIBRARY_PATH=" + config.libs_path + ":$LD_LIBRARY_PATH && "
                      "export TAOS_CFG_DIR=" + config.taos_cfg_path + " && "
@@ -1686,7 +1686,7 @@ string handle_request(const string& request) {
         
         system(cmd.c_str());
         
-        string result = "{\"success\":true,\"count\":" + to_string(count) + ",\"message\":\"自动分类任务已启动\",\"db_name\":\"" + db_name + "\"}";
+        string result = "{\"success\":true,\"count\":" + to_string(count) + ",\"message\":\"Auto-classification task started\",\"db_name\":\"" + db_name + "\"}";
         return "HTTP/1.1 200 OK\r\n"
                "Content-Type: application/json\r\n"
                "Access-Control-Allow-Origin: *\r\n"
@@ -1694,7 +1694,7 @@ string handle_request(const string& request) {
                "\r\n" + result;
     }
     else if (path == "/api/auto_classify/stop" && method == "POST") {
-        // 写入停止信号
+        // Write stop signal
         ofstream stop_file("/tmp/auto_classify_stop");
         stop_file << "stop" << endl;
         stop_file.close();
@@ -1703,7 +1703,7 @@ string handle_request(const string& request) {
         
         system("pkill -9 -f 'auto_classify.py' 2>/dev/null");
         
-        string result = "{\"success\":true,\"message\":\"已发送停止信号\"}";
+        string result = "{\"success\":true,\"message\":\"Stop signal sent\"}";
         return "HTTP/1.1 200 OK\r\n"
                "Content-Type: application/json\r\n"
                "Access-Control-Allow-Origin: *\r\n"
@@ -1713,7 +1713,7 @@ string handle_request(const string& request) {
     else if (path == "/api/auto_classify/status") {
         string progress_path = "/tmp/auto_classify_progress.json";
         ifstream file(progress_path);
-        string json_response = "{\"percent\":0,\"message\":\"未运行\",\"status\":\"idle\"}";
+        string json_response = "{\"percent\":0,\"message\":\"Not running\",\"status\":\"idle\"}";
         if (file.is_open()) {
             stringstream ss;
             ss << file.rdbuf();
@@ -1905,7 +1905,7 @@ void handle_auto_classify_stream(int client_socket, const string& request) {
         }
         
         if (json_data.empty()) {
-            json_data = "{\"percent\":0,\"message\":\"等待中...\",\"status\":\"idle\"}";
+            json_data = "{\"percent\":0,\"message\":\"Waiting...\",\"status\":\"idle\"}";
         }
         
         if (json_data != last_sent_data) {
@@ -1916,7 +1916,7 @@ void handle_auto_classify_stream(int client_socket, const string& request) {
             last_sent_data = json_data;
             last_heartbeat = time(nullptr);
             
-            // 检查是否完成或暂停
+            // Check if completed or paused
             if (json_data.find("\"status\":\"completed\"") != string::npos ||
                 json_data.find("\"status\":\"paused\"") != string::npos ||
                 json_data.find("\"status\":\"error\"") != string::npos) {

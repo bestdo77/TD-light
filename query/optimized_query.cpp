@@ -1,11 +1,11 @@
 /*
- * 优化的 TDengine HEALPix 空间查询工具
- * 支持：
- *   1. 锥形检索（Cone Search）
- *   2. 单个 ID 的时间范围检索
- *   3. 批量查询优化
+ * Optimized TDengine HEALPix Spatial Query Tool
+ * Supports:
+ *   1. Cone Search
+ *   2. Time Range Query for Single ID
+ *   3. Batch Query Optimization
  * 
- * 编译: g++ -std=c++17 -O3 -march=native optimized_query.cpp -o optimized_query -ltaos -lhealpix_cxx -lpthread
+ * Compile: g++ -std=c++17 -O3 -march=native optimized_query.cpp -o optimized_query -ltaos -lhealpix_cxx -lpthread
  */
 
 #include <iostream>
@@ -26,12 +26,12 @@
 using namespace std;
 using namespace std::chrono;
 
-// 常量定义
+// Constants
 const double PI = 3.14159265358979323846;
 const double DEG2RAD = PI / 180.0;
 const double RAD2DEG = 180.0 / PI;
 
-// 查询结果结构
+// Query result structure
 struct QueryResult {
     int64_t ts;
     long long source_id;
@@ -42,7 +42,7 @@ struct QueryResult {
     double jd_tcb;
 };
 
-// 统计信息
+// Statistics
 struct QueryStats {
     int total_results = 0;
     double query_time_ms = 0;
@@ -69,19 +69,19 @@ public:
                         int port = 6030)
         : db_name(database), super_table(table), nside(nside_param) {
         
-        cout << "🔧 初始化 HEALPix (NSIDE=" << nside << ")..." << endl;
+        cout << "[INFO] Initializing HEALPix (NSIDE=" << nside << ")..." << endl;
         healpix_map = make_unique<Healpix_Base>(nside, NEST, SET_NSIDE);
         
-        cout << "🔗 连接 TDengine 数据库..." << endl;
+        cout << "[INFO] Connecting to TDengine database..." << endl;
         taos_init();
         
         conn = taos_connect(host.c_str(), user.c_str(), password.c_str(), 
                           database.c_str(), port);
         if (!conn) {
-            throw runtime_error("❌ 连接失败: " + string(taos_errstr(conn)));
+            throw runtime_error("Connection failed: " + string(taos_errstr(conn)));
         }
         
-        cout << "✅ 连接成功: " << database << "@" << host << ":" << port << endl;
+        cout << "[OK] Connected: " << database << "@" << host << ":" << port << endl;
     }
     
     ~OptimizedQueryEngine() {
@@ -91,7 +91,7 @@ public:
         taos_cleanup();
     }
     
-    // 角距离计算（使用球面三角学）
+    // Angular distance calculation (using spherical trigonometry)
     double calculateAngularDistance(double ra1, double dec1, double ra2, double dec2) {
         double ra1_rad = ra1 * DEG2RAD;
         double dec1_rad = dec1 * DEG2RAD;
@@ -102,13 +102,13 @@ public:
         double cos_dist = sin(dec1_rad) * sin(dec2_rad) + 
                          cos(dec1_rad) * cos(dec2_rad) * cos(dra);
         
-        // 防止数值误差
+        // Prevent numerical errors
         cos_dist = max(-1.0, min(1.0, cos_dist));
         
         return acos(cos_dist) * RAD2DEG;
     }
     
-    // 锥形检索 - 使用 HEALPix 加速
+    // Cone search - HEALPix accelerated
     QueryStats coneSearch(double center_ra, double center_dec, double radius_deg,
                          vector<QueryResult>& results, bool verbose = true,
                          const string& time_filter = "", int limit = -1) {
@@ -118,20 +118,20 @@ public:
         
         auto start_time = high_resolution_clock::now();
         
-        // 参数验证
+        // Parameter validation
         center_ra = fmod(center_ra, 360.0);
         if (center_ra < 0) center_ra += 360.0;
         center_dec = max(-90.0, min(90.0, center_dec));
         
         if (verbose) {
-            cout << "\n🎯 锥形检索" << endl;
+            cout << "\n=== Cone Search ===" << endl;
             cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-            cout << "  中心坐标: RA=" << fixed << setprecision(6) << center_ra 
-                 << "°, DEC=" << center_dec << "°" << endl;
-            cout << "  搜索半径: " << radius_deg << "°" << endl;
+            cout << "  Center: RA=" << fixed << setprecision(6) << center_ra 
+                 << " deg, DEC=" << center_dec << " deg" << endl;
+            cout << "  Radius: " << radius_deg << " deg" << endl;
         }
         
-        // 1. 使用 HEALPix 找到锥形区域内的所有像素
+        // 1. Use HEALPix to find all pixels in the cone region
         pointing center_pt(DEG2RAD * (90.0 - center_dec), DEG2RAD * center_ra);
         double radius_rad = radius_deg * DEG2RAD;
         
@@ -139,7 +139,7 @@ public:
         healpix_map->query_disc(center_pt, radius_rad, pixels);
         
         if (pixels.empty()) {
-            // 如果没有找到像素，至少使用中心像素
+            // If no pixels found, use at least the center pixel
             int center_pix = healpix_map->ang2pix(center_pt);
             pixels.push_back(center_pix);
         }
@@ -147,10 +147,10 @@ public:
         stats.healpix_pixels_searched = pixels.size();
         
         if (verbose) {
-            cout << "  HEALPix像素: " << pixels.size() << " 个" << endl;
+            cout << "  HEALPix pixels: " << pixels.size() << endl;
         }
         
-        // 2. 构建优化的 SQL 查询
+        // 2. Build optimized SQL query
         ostringstream sql;
         sql << "SELECT ts, source_id, ra, dec, band, cls, mag, mag_error, "
             << "flux, flux_error, jd_tcb FROM " << super_table 
@@ -162,7 +162,7 @@ public:
         }
         sql << ")";
         
-        // 添加时间过滤条件
+        // Add time filter condition
         if (!time_filter.empty()) {
             sql << " AND " << time_filter;
         }
@@ -173,12 +173,12 @@ public:
         }
         
         if (verbose) {
-            cout << "  SQL查询长度: " << sql.str().length() << " 字符" << endl;
+            cout << "  SQL query length: " << sql.str().length() << " chars" << endl;
         }
         
         auto query_start = high_resolution_clock::now();
         
-        // 3. 执行查询
+        // 3. Execute query
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
             string error = "查询失败: " + string(taos_errstr(res));
@@ -189,7 +189,7 @@ public:
         auto fetch_start = high_resolution_clock::now();
         stats.query_time_ms = duration<double, milli>(fetch_start - query_start).count();
         
-        // 4. 获取结果并进行精确的角距离过滤
+        // 4. Fetch results and perform precise angular distance filtering
         TAOS_ROW row;
         int total_fetched = 0;
         int filtered_count = 0;
@@ -197,7 +197,7 @@ public:
         while ((row = taos_fetch_row(res))) {
             total_fetched++;
             
-            // 解析结果
+            // Parse results
             QueryResult result;
             result.ts = *(int64_t*)row[0];
             result.source_id = *(long long*)row[1];
@@ -211,7 +211,7 @@ public:
             result.flux_error = *(double*)row[9];
             result.jd_tcb = *(double*)row[10];
             
-            // 精确角距离计算
+            // Precise angular distance calculation
             double dist = calculateAngularDistance(center_ra, center_dec, 
                                                    result.ra, result.dec);
             
@@ -232,19 +232,19 @@ public:
         double total_time = duration<double, milli>(end_time - start_time).count();
         
         if (verbose) {
-            cout << "\n📊 查询统计" << endl;
-            cout << "  HEALPix筛选: " << total_fetched << " 条记录" << endl;
-            cout << "  角距离过滤: " << filtered_count << " 条记录（精确匹配）" << endl;
-            cout << "  查询耗时: " << fixed << setprecision(2) << stats.query_time_ms << " ms" << endl;
-            cout << "  数据获取: " << stats.fetch_time_ms << " ms" << endl;
-            cout << "  总耗时: " << total_time << " ms" << endl;
+            cout << "\n[STATS] Query Statistics" << endl;
+            cout << "  HEALPix filtered: " << total_fetched << " records" << endl;
+            cout << "  Angular distance filtered: " << filtered_count << " records (exact match)" << endl;
+            cout << "  Query time: " << fixed << setprecision(2) << stats.query_time_ms << " ms" << endl;
+            cout << "  Fetch time: " << stats.fetch_time_ms << " ms" << endl;
+            cout << "  Total time: " << total_time << " ms" << endl;
             cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
         }
         
         return stats;
     }
     
-    // 单个 source_id 的时间范围检索
+    // Time range query for single source_id
     QueryStats timeRangeQuery(long long source_id, const string& time_condition,
                              vector<QueryResult>& results, bool verbose = true,
                              int limit = -1) {
@@ -255,24 +255,24 @@ public:
         auto start_time = high_resolution_clock::now();
         
         if (verbose) {
-            cout << "\n⏰ 时间范围查询" << endl;
+            cout << "\n=== Time Range Query ===" << endl;
             cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
             cout << "  Source ID: " << source_id << endl;
-            cout << "  时间条件: " << time_condition << endl;
+            cout << "  Time condition: " << time_condition << endl;
         }
         
-        // 构建 SQL 查询（使用 TAGS 过滤优化）
+        // Build SQL query (optimized with TAGS filtering)
         ostringstream sql;
         sql << "SELECT ts, source_id, ra, dec, band, cls, mag, mag_error, "
             << "flux, flux_error, jd_tcb FROM " << super_table 
             << " WHERE source_id = " << source_id;
         
-        // 添加时间条件
+        // Add time condition
         if (!time_condition.empty()) {
             sql << " AND " << time_condition;
         }
         
-        // 按时间排序
+        // Order by time
         sql << " ORDER BY ts ASC";
         
         // 添加 LIMIT
@@ -289,7 +289,7 @@ public:
         // 执行查询
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
-            string error = "查询失败: " + string(taos_errstr(res));
+            string error = "Query failed: " + string(taos_errstr(res));
             taos_free_result(res);
             throw runtime_error(error);
         }
@@ -297,7 +297,7 @@ public:
         auto fetch_start = high_resolution_clock::now();
         stats.query_time_ms = duration<double, milli>(fetch_start - query_start).count();
         
-        // 获取结果
+        // Fetch results
         TAOS_ROW row;
         while ((row = taos_fetch_row(res))) {
             QueryResult result;
@@ -327,26 +327,26 @@ public:
         double total_time = duration<double, milli>(end_time - start_time).count();
         
         if (verbose) {
-            cout << "\n📊 查询统计" << endl;
-            cout << "  结果数量: " << stats.total_results << " 条记录" << endl;
-            cout << "  查询耗时: " << fixed << setprecision(2) << stats.query_time_ms << " ms" << endl;
-            cout << "  数据获取: " << stats.fetch_time_ms << " ms" << endl;
-            cout << "  总耗时: " << total_time << " ms" << endl;
+            cout << "\n[STATS] Query Statistics" << endl;
+            cout << "  Result count: " << stats.total_results << " records" << endl;
+            cout << "  Query time: " << fixed << setprecision(2) << stats.query_time_ms << " ms" << endl;
+            cout << "  Fetch time: " << stats.fetch_time_ms << " ms" << endl;
+            cout << "  Total time: " << total_time << " ms" << endl;
             cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
         }
         
         return stats;
     }
     
-    // 批量锥形检索（多中心点优化）
+    // Batch cone search (multi-center optimization)
     map<int, QueryStats> batchConeSearch(const vector<tuple<double, double, double>>& queries,
                                         map<int, vector<QueryResult>>& all_results,
                                         bool verbose = true) {
         map<int, QueryStats> stats_map;
         
-        cout << "\n🚀 批量锥形检索" << endl;
+        cout << "\n=== Batch Cone Search ===" << endl;
         cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-        cout << "  查询数量: " << queries.size() << endl;
+        cout << "  Query count: " << queries.size() << endl;
         
         auto total_start = high_resolution_clock::now();
         
@@ -362,42 +362,42 @@ public:
             stats_map[i] = stats;
             
             if (verbose && (i + 1) % 10 == 0) {
-                cout << "  进度: " << (i + 1) << "/" << queries.size() << endl;
+                cout << "  Progress: " << (i + 1) << "/" << queries.size() << endl;
             }
         }
         
         auto total_end = high_resolution_clock::now();
         double total_time = duration<double, milli>(total_end - total_start).count();
         
-        // 统计
+        // Statistics
         int total_results = 0;
         for (const auto& [idx, stats] : stats_map) {
             total_results += stats.total_results;
         }
         
-        cout << "\n📊 批量查询完成" << endl;
-        cout << "  总查询数: " << queries.size() << endl;
-        cout << "  总结果数: " << total_results << " 条" << endl;
-        cout << "  总耗时: " << fixed << setprecision(2) << total_time << " ms" << endl;
-        cout << "  平均耗时: " << (total_time / queries.size()) << " ms/查询" << endl;
-        cout << "  吞吐量: " << fixed << setprecision(1) 
-             << (queries.size() * 1000.0 / total_time) << " 查询/秒" << endl;
+        cout << "\n[STATS] Batch Query Complete" << endl;
+        cout << "  Total queries: " << queries.size() << endl;
+        cout << "  Total results: " << total_results << endl;
+        cout << "  Total time: " << fixed << setprecision(2) << total_time << " ms" << endl;
+        cout << "  Avg time: " << (total_time / queries.size()) << " ms/query" << endl;
+        cout << "  Throughput: " << fixed << setprecision(1) 
+             << (queries.size() * 1000.0 / total_time) << " queries/s" << endl;
         cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
         
         return stats_map;
     }
     
-    // 输出结果到文件（CSV格式）
+    // Export results to file (CSV format)
     void exportToCSV(const vector<QueryResult>& results, const string& filename) {
         ofstream file(filename);
         if (!file.is_open()) {
-            throw runtime_error("无法创建输出文件: " + filename);
+            throw runtime_error("Cannot create output file: " + filename);
         }
         
-        // 写入表头
+        // Write header
         file << "ts,source_id,ra,dec,band,cls,mag,mag_error,flux,flux_error,jd_tcb\n";
         
-        // 写入数据
+        // Write data
         for (const auto& r : results) {
             file << r.ts << "," << r.source_id << ","
                  << fixed << setprecision(8) << r.ra << ","
@@ -408,20 +408,20 @@ public:
         }
         
         file.close();
-        cout << "✅ 结果已导出到: " << filename << " (" << results.size() << " 条)" << endl;
+        cout << "[OK] Results exported to: " << filename << " (" << results.size() << " records)" << endl;
     }
     
-    // 显示前 N 条结果
+    // Display first N results
     void displayResults(const vector<QueryResult>& results, int max_display = 10) {
         if (results.empty()) {
-            cout << "  无结果" << endl;
+            cout << "  No results" << endl;
             return;
         }
         
         int display_count = min(max_display, (int)results.size());
         
-        cout << "\n📋 查询结果（显示前 " << display_count << " 条，共 " 
-             << results.size() << " 条）" << endl;
+        cout << "\n[RESULTS] Query results (showing " << display_count << " of " 
+             << results.size() << " records)" << endl;
         cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
         
         for (int i = 0; i < display_count; ++i) {
@@ -436,45 +436,45 @@ public:
         }
         
         if (results.size() > display_count) {
-            cout << "  ... 还有 " << (results.size() - display_count) << " 条结果未显示" << endl;
+            cout << "  ... " << (results.size() - display_count) << " more results not shown" << endl;
         }
         cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     }
 };
 
 void printUsage(const char* program) {
-    cout << "\n使用方法:\n" << endl;
-    cout << "🎯 锥形检索:" << endl;
-    cout << "  " << program << " --cone --ra <度> --dec <度> --radius <度> [选项]" << endl;
+    cout << "\nUsage:\n" << endl;
+    cout << "Cone Search:" << endl;
+    cout << "  " << program << " --cone --ra <deg> --dec <deg> --radius <deg> [options]" << endl;
     cout << endl;
-    cout << "⏰ 时间范围查询:" << endl;
-    cout << "  " << program << " --time --source_id <ID> --time_cond \"<条件>\" [选项]" << endl;
+    cout << "Time Range Query:" << endl;
+    cout << "  " << program << " --time --source_id <ID> --time_cond \"<condition>\" [options]" << endl;
     cout << endl;
-    cout << "📦 批量锥形检索:" << endl;
-    cout << "  " << program << " --batch --input <CSV文件> [选项]" << endl;
-    cout << "     CSV格式: ra,dec,radius (每行一个查询)" << endl;
+    cout << "Batch Cone Search:" << endl;
+    cout << "  " << program << " --batch --input <CSV_file> [options]" << endl;
+    cout << "     CSV format: ra,dec,radius (one query per line)" << endl;
     cout << endl;
-    cout << "通用选项:" << endl;
-    cout << "  --db <名称>          数据库名 (默认: test_db)" << endl;
-    cout << "  --host <地址>        服务器地址 (默认: localhost)" << endl;
-    cout << "  --port <端口>        端口 (默认: 6030)" << endl;
-    cout << "  --user <用户>        用户名 (默认: root)" << endl;
-    cout << "  --password <密码>    密码 (默认: taosdata)" << endl;
-    cout << "  --table <表名>       超级表名 (默认: sensor_data)" << endl;
-    cout << "  --nside <值>         HEALPix NSIDE (默认: 64)" << endl;
-    cout << "  --output <文件>      输出CSV文件" << endl;
-    cout << "  --limit <数量>       限制结果数量" << endl;
-    cout << "  --display <数量>     显示结果数量 (默认: 10)" << endl;
-    cout << "  --quiet              静默模式（不显示详细信息）" << endl;
+    cout << "Common Options:" << endl;
+    cout << "  --db <name>          Database name (default: test_db)" << endl;
+    cout << "  --host <address>     Server address (default: localhost)" << endl;
+    cout << "  --port <port>        Port (default: 6030)" << endl;
+    cout << "  --user <user>        Username (default: root)" << endl;
+    cout << "  --password <pass>    Password (default: taosdata)" << endl;
+    cout << "  --table <name>       Super table name (default: sensor_data)" << endl;
+    cout << "  --nside <value>      HEALPix NSIDE (default: 64)" << endl;
+    cout << "  --output <file>      Output CSV file" << endl;
+    cout << "  --limit <count>      Limit result count" << endl;
+    cout << "  --display <count>    Display result count (default: 10)" << endl;
+    cout << "  --quiet              Quiet mode (no verbose output)" << endl;
     cout << endl;
-    cout << "示例:" << endl;
-    cout << "  # 锥形检索: 中心(180°, 30°), 半径0.1°" << endl;
+    cout << "Examples:" << endl;
+    cout << "  # Cone search: center(180 deg, 30 deg), radius 0.1 deg" << endl;
     cout << "  " << program << " --cone --ra 180 --dec 30 --radius 0.1 --output results.csv" << endl;
     cout << endl;
-    cout << "  # 时间查询: source_id=12345, 最近30天" << endl;
+    cout << "  # Time query: source_id=12345, last 30 days" << endl;
     cout << "  " << program << " --time --source_id 12345 --time_cond \"ts >= NOW() - INTERVAL(30, DAY)\"" << endl;
     cout << endl;
-    cout << "  # 批量查询" << endl;
+    cout << "  # Batch query" << endl;
     cout << "  " << program << " --batch --input queries.csv --output batch_results/" << endl;
     cout << endl;
 }
@@ -491,23 +491,23 @@ int main(int argc, char* argv[]) {
         int port = 6030;
         int nside = 64;
         
-        // 锥形查询参数
+        // Cone search parameters
         double ra = -999, dec = -999, radius = -1;
         
-        // 时间查询参数
+        // Time query parameters
         long long source_id = -1;
         string time_cond;
         
-        // 批量查询参数
+        // Batch query parameters
         string input_file;
         
-        // 输出参数
+        // Output parameters
         string output_file;
         int limit = -1;
         int display = 10;
         bool verbose = true;
         
-        // 解析参数
+        // Parse arguments
         if (argc < 2) {
             printUsage(argv[0]);
             return 1;
@@ -542,66 +542,66 @@ int main(int argc, char* argv[]) {
             else if (arg == "--quiet") verbose = false;
         }
         
-        // 创建查询引擎
-        cout << "🚀 优化的 TDengine HEALPix 查询工具" << endl;
+        // Create query engine
+        cout << "=== Optimized TDengine HEALPix Query Tool ===" << endl;
         cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
         
         OptimizedQueryEngine engine(host, user, password, db_name, table, nside, port);
         
-        // 执行查询
+        // Execute query
         if (mode == "cone") {
-            // 锥形检索
+            // Cone search
             if (ra == -999 || dec == -999 || radius == -1) {
-                cerr << "❌ 锥形查询需要 --ra, --dec, --radius 参数" << endl;
+                cerr << "[ERROR] Cone search requires --ra, --dec, --radius parameters" << endl;
                 return 1;
             }
             
             vector<QueryResult> results;
             engine.coneSearch(ra, dec, radius, results, verbose);
             
-            // 显示结果
+            // Display results
             engine.displayResults(results, display);
             
-            // 导出结果
+            // Export results
             if (!output_file.empty()) {
                 engine.exportToCSV(results, output_file);
             }
         }
         else if (mode == "time") {
-            // 时间范围查询
+            // Time range query
             if (source_id == -1) {
-                cerr << "❌ 时间查询需要 --source_id 参数" << endl;
+                cerr << "[ERROR] Time query requires --source_id parameter" << endl;
                 return 1;
             }
             
             vector<QueryResult> results;
             engine.timeRangeQuery(source_id, time_cond, results, verbose, limit);
             
-            // 显示结果
+            // Display results
             engine.displayResults(results, display);
             
-            // 导出结果
+            // Export results
             if (!output_file.empty()) {
                 engine.exportToCSV(results, output_file);
             }
         }
         else if (mode == "batch") {
-            // 批量锥形检索
+            // Batch cone search
             if (input_file.empty()) {
-                cerr << "❌ 批量查询需要 --input 参数" << endl;
+                cerr << "[ERROR] Batch query requires --input parameter" << endl;
                 return 1;
             }
             
-            // 读取批量查询文件
+            // Read batch query file
             ifstream file(input_file);
             if (!file.is_open()) {
-                cerr << "❌ 无法打开输入文件: " << input_file << endl;
+                cerr << "[ERROR] Cannot open input file: " << input_file << endl;
                 return 1;
             }
             
             vector<tuple<double, double, double>> queries;
             string line;
-            getline(file, line); // 跳过表头
+            getline(file, line); // Skip header
             
             while (getline(file, line)) {
                 istringstream ss(line);
@@ -620,13 +620,13 @@ int main(int argc, char* argv[]) {
             }
             file.close();
             
-            cout << "📖 读取批量查询: " << queries.size() << " 个" << endl;
+            cout << "[INFO] Loaded batch queries: " << queries.size() << endl;
             
-            // 执行批量查询
+            // Execute batch query
             map<int, vector<QueryResult>> all_results;
             engine.batchConeSearch(queries, all_results, verbose);
             
-            // 导出结果
+            // Export results
             if (!output_file.empty()) {
                 for (const auto& [idx, results] : all_results) {
                     string out = output_file + "/query_" + to_string(idx) + ".csv";
@@ -635,17 +635,17 @@ int main(int argc, char* argv[]) {
             }
         }
         else {
-            cerr << "❌ 需要指定查询模式: --cone, --time, 或 --batch" << endl;
+            cerr << "[ERROR] Query mode required: --cone, --time, or --batch" << endl;
             printUsage(argv[0]);
             return 1;
         }
         
-        cout << "✅ 查询完成" << endl;
+        cout << "[OK] Query complete" << endl;
         
         return 0;
         
     } catch (const exception& e) {
-        cerr << "❌ 错误: " << e.what() << endl;
+        cerr << "[ERROR] " << e.what() << endl;
         return 1;
     }
 }

@@ -1,14 +1,14 @@
 /*
- * TDengine 终极优化版导入器 v12 - 直接版（无队列）
+ * TDengine Ultimate Optimized Importer v12 - Direct Version (No Queue)
  * 
- * 架构：
- * 阶段1：预先批量创建所有子表
- * 阶段2：每个线程分配一批文件，直接读+写，无生产者-消费者队列
+ * Architecture:
+ * Phase 1: Batch create all child tables in advance
+ * Phase 2: Each thread processes assigned files directly (read+write), no producer-consumer queue
  * 
- * 优势：
- * 1. 无队列锁开销
- * 2. 每线程独立工作，NUMA 友好
- * 3. 大 batch，充分利用内存
+ * Advantages:
+ * 1. No queue lock overhead
+ * 2. Independent thread work, NUMA-friendly
+ * 3. Large batch size, fully utilizing memory
  */
 
 #include <iostream>
@@ -34,12 +34,12 @@ using namespace std;
 using namespace std::chrono;
 namespace fs = std::filesystem;
 
-// ==================== 配置参数 ====================
-constexpr int NUM_THREADS = 64;           // 线程数
-constexpr int CREATE_TABLE_BATCH = 2000;  // 每批创建表数（加大）
+// ==================== Configuration Parameters ====================
+constexpr int NUM_THREADS = 64;           // Number of threads
+constexpr int CREATE_TABLE_BATCH = 2000;  // Tables per batch (increased)
 constexpr int TAOS_PORT = 6041;
 
-// ==================== 数据结构 ====================
+// ==================== Data Structures ====================
 
 struct Record {
     int64_t ts_ms;
@@ -69,7 +69,7 @@ struct PerfStats {
 
 mutex g_print_mutex;
 
-// ==================== 工具函数 ====================
+// ==================== Utility Functions ====================
 
 string get_taos_host() {
     const char* env_host = getenv("TAOS_HOST");
@@ -96,7 +96,7 @@ double calculateMagError(double flux, double flux_error) {
     return 1.0857 * flux_error / flux;
 }
 
-// ==================== 阶段1：批量创建表 ====================
+// ==================== Phase 1: Batch Create Tables ====================
 
 void batch_create_tables(TAOS* conn, const vector<SubTable>& tables, 
                          const string& super_table, PerfStats& stats) {
@@ -122,7 +122,7 @@ void batch_create_tables(TAOS* conn, const vector<SubTable>& tables,
     taos_free_result(res);
 }
 
-// ==================== 阶段2：直接处理线程 ====================
+// ==================== Phase 2: Direct Processing Thread ====================
 
 void direct_worker_thread(int thread_id, 
                           const vector<SubTable>& my_tables,
@@ -134,7 +134,7 @@ void direct_worker_thread(int thread_id,
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), TAOS_PORT);
     if (!conn) {
         lock_guard<mutex> lock(g_print_mutex);
-        cerr << "❌ 线程 " << thread_id << " 连接失败" << endl;
+        cerr << "[ERROR] Thread " << thread_id << " connection failed" << endl;
         return;
     }
     
@@ -154,9 +154,9 @@ void direct_worker_thread(int thread_id,
     
     int64_t local_inserted = 0;
     
-    // 直接处理分配给我的所有表
+    // Process all tables assigned to this thread directly
     for (const auto& st : my_tables) {
-        // 1. 读取文件
+        // 1. Read file
         vector<Record> records;
         ifstream file(st.file_path);
         if (!file.is_open()) continue;
@@ -187,7 +187,7 @@ void direct_worker_thread(int thread_id,
             continue;
         }
         
-        // 2. STMT 写入
+        // 2. STMT write
         ret = taos_stmt_set_tbname(stmt, st.table_name.c_str());
         if (ret != 0) {
             stats.processed_files++;
@@ -284,7 +284,7 @@ void direct_worker_thread(int thread_id,
     taos_close(conn);
 }
 
-// ==================== 监控线程 ====================
+// ==================== Monitor Thread ====================
 
 void write_progress_json(int percent, const string& message, const string& status,
                          int64_t processed, int64_t total, int64_t inserted, int64_t created, int elapsed) {
@@ -306,7 +306,7 @@ void monitor_thread(PerfStats& stats) {
     int64_t last_inserted = 0;
     
     while (stats.processed_files < stats.total_files) {
-        // 检查停止信号
+        // Check for stop signal
         ifstream stop_file("/tmp/import_stop");
         if (stop_file.is_open()) {
             stop_file.close();
@@ -327,7 +327,7 @@ void monitor_thread(PerfStats& stats) {
         double pct = total > 0 ? (double)processed / total * 100.0 : 0.0;
         int elapsed = duration_cast<seconds>(high_resolution_clock::now() - start).count();
         
-        // 输出进度 JSON
+        // Output progress JSON
         stringstream msg;
         msg << "Processing: " << processed << "/" << total << " files, " << speed << " rows/s";
         write_progress_json((int)pct, msg.str(), "running", processed, total, inserted, created, elapsed);
@@ -337,14 +337,14 @@ void monitor_thread(PerfStats& stats) {
         for (int i = 0; i < filled; ++i) bar[i] = '#';
         
         lock_guard<mutex> lock(g_print_mutex);
-        cout << "\r🚀 [" << bar << "] " << fixed << setprecision(1) << pct << "% "
-             << "| 文件:" << processed << "/" << total
-             << " 行:" << inserted
-             << " 速:" << speed << "/s"
+        cout << "\r[PROGRESS] [" << bar << "] " << fixed << setprecision(1) << pct << "% "
+             << "| Files:" << processed << "/" << total
+             << " Rows:" << inserted
+             << " Speed:" << speed << "/s"
              << "    " << flush;
     }
     
-    // 完成时写入 100%
+    // Write 100% when complete
     int elapsed = duration_cast<seconds>(high_resolution_clock::now() - start).count();
     write_progress_json(100, "Import completed", "completed", 
                         stats.processed_files.load(), stats.total_files.load(),
@@ -352,7 +352,7 @@ void monitor_thread(PerfStats& stats) {
     cout << endl;
 }
 
-// ==================== 主函数 ====================
+// ==================== Main Function ====================
 
 int main(int argc, char* argv[]) {
     setbuf(stdout, NULL); // Disable buffering
@@ -370,15 +370,15 @@ int main(int argc, char* argv[]) {
     }
     
     if (lc_dir.empty() || coords_file.empty()) {
-        cerr << "用法: " << argv[0] << " --lightcurves_dir <dir> --coords <file> [--db <name>] [--drop_db]" << endl;
+        cerr << "Usage: " << argv[0] << " --lightcurves_dir <dir> --coords <file> [--db <name>] [--drop_db]" << endl;
         return 1;
     }
     
-    // 从可执行文件路径推导配置目录（支持从任意工作目录启动）
+    // Derive config directory from executable path (supports launching from any working directory)
     string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
     string taos_cfg_dir = exe_path + "/../runtime/taos_home/cfg";
     if (!fs::exists(taos_cfg_dir)) {
-        // 回退：尝试当前目录
+        // Fallback: try current directory
         taos_cfg_dir = fs::current_path().string() + "/taos_home/cfg";
     }
     if (fs::exists(taos_cfg_dir)) {
@@ -386,20 +386,20 @@ int main(int argc, char* argv[]) {
     }
     taos_init();
     
-    cout << "\n🚀 TDengine 导入器 v12 (直接版，无队列)" << endl;
+    cout << "\n=== TDengine Importer v12 (Direct, No Queue) ===" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "📂 数据目录: " << lc_dir << endl;
-    cout << "🧵 线程数: " << NUM_THREADS << endl;
-    cout << "🔌 端口: " << TAOS_PORT << endl;
+    cout << "[INFO] Data directory: " << lc_dir << endl;
+    cout << "[INFO] Threads: " << NUM_THREADS << endl;
+    cout << "[INFO] Port: " << TAOS_PORT << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
-    // 初始化阶段进度
+    // Initialize phase progress
     write_progress_json(0, "Connecting to database...", "running", 0, 0, 0, 0, 0);
     
-    // 准备数据库
+    // Prepare database
     TAOS* conn = taos_connect(get_taos_host().c_str(), "root", "taosdata", NULL, TAOS_PORT);
     if (!conn) { 
-        cerr << "❌ 连接失败" << endl;
+        cerr << "[ERROR] Connection failed" << endl;
         write_progress_json(0, "Connection failed!", "error", 0, 0, 0, 0, 0);
         return 1; 
     }
@@ -409,18 +409,18 @@ int main(int argc, char* argv[]) {
     if (drop_db) {
         taos_query(conn, ("DROP DATABASE IF EXISTS " + db_name).c_str());
     }
-    // 创建数据库时指定更多 vgroup，避免刷盘瓶颈
+    // Specify more vgroups when creating database to avoid disk flush bottleneck
     taos_query(conn, ("CREATE DATABASE IF NOT EXISTS " + db_name + " KEEP 36500 VGROUPS 128 BUFFER 256").c_str());
     taos_query(conn, ("USE " + db_name).c_str());
     taos_query(conn, ("CREATE STABLE IF NOT EXISTS " + super_table + 
                      " (ts TIMESTAMP, band NCHAR(16), mag DOUBLE, mag_error DOUBLE, "
                      "flux DOUBLE, flux_error DOUBLE, jd_tcb DOUBLE) "
                      "TAGS (healpix_id BIGINT, source_id BIGINT, ra DOUBLE, dec DOUBLE, cls NCHAR(32))").c_str());
-    cout << "✅ 数据库已就绪" << endl;
+    cout << "[OK] Database ready" << endl;
     
-    // 加载元数据
+    // Load metadata
     write_progress_json(0, "Loading coordinates...", "running", 0, 0, 0, 0, 0);
-    cout << "📖 加载坐标数据..." << endl;
+    cout << "[INFO] Loading coordinate data..." << endl;
     map<int64_t, pair<double, double>> coords;
     ifstream cfile(coords_file);
     string line;
@@ -431,10 +431,10 @@ int main(int argc, char* argv[]) {
             try { coords[stoll(tokens[0])] = {stod(tokens[1]), stod(tokens[2])}; } catch(...) {}
         }
     }
-    cout << "✅ 加载 " << coords.size() << " 个坐标" << endl;
+    cout << "[OK] Loaded " << coords.size() << " coordinates" << endl;
     
     write_progress_json(0, "Calculating HEALPix...", "running", 0, 0, 0, 0, 0);
-    cout << "🗺️  计算 HEALPix..." << endl;
+    cout << "[INFO] Calculating HEALPix..." << endl;
     Healpix_Base hp(64, NEST, SET_NSIDE);
     map<int64_t, int64_t> healpix_map;
     for (auto& [sid, c] : coords) {
@@ -445,9 +445,9 @@ int main(int argc, char* argv[]) {
         healpix_map[sid] = hp.ang2pix(pointing(theta, phi));
     }
     
-    // ========== 收集所有表信息 ==========
+    // ========== Collect All Table Information ==========
     write_progress_json(0, "Scanning files...", "running", 0, 0, 0, 0, 0);
-    cout << "📋 扫描文件..." << endl;
+    cout << "[INFO] Scanning files..." << endl;
     vector<SubTable> all_tables;
     
     for (const auto& entry : fs::directory_iterator(lc_dir)) {
@@ -476,13 +476,13 @@ int main(int argc, char* argv[]) {
         
         all_tables.push_back(st);
     }
-    cout << "✅ 扫描到 " << all_tables.size() << " 个文件" << endl;
+    cout << "[OK] Found " << all_tables.size() << " files" << endl;
     
     PerfStats stats;
     stats.total_files = all_tables.size();
     
-    // ========== 阶段1：预先创建所有子表 ==========
-    cout << "\n📋 阶段1: 预先创建子表..." << endl;
+    // ========== Phase 1: Pre-create All Child Tables ==========
+    cout << "\n[PHASE 1] Pre-creating child tables..." << endl;
     auto phase1_start = high_resolution_clock::now();
     
     vector<SubTable> table_batch;
@@ -496,7 +496,7 @@ int main(int argc, char* argv[]) {
             if (stats.created_tables % 200 == 0) {
                 auto now = high_resolution_clock::now();
                 int elapsed = duration_cast<seconds>(now - phase1_start).count();
-                cout << "\r  ✅ 已创建 " << stats.created_tables << " 张表..." << flush;
+                cout << "\r  [OK] Created " << stats.created_tables << " tables..." << flush;
                 write_progress_json(0, "Phase 1/2: Creating tables (" + to_string(stats.created_tables) + ")", "running", 0, stats.total_files, 0, stats.created_tables, elapsed);
             }
         }
@@ -507,31 +507,31 @@ int main(int argc, char* argv[]) {
     
     auto phase1_end = high_resolution_clock::now();
     double phase1_time = duration_cast<milliseconds>(phase1_end - phase1_start).count() / 1000.0;
-    cout << "\r  ✅ 阶段1完成: 创建 " << stats.created_tables << " 张表，耗时 " 
-         << fixed << setprecision(2) << phase1_time << " 秒" << endl;
+    cout << "\r  [OK] Phase 1 complete: Created " << stats.created_tables << " tables in " 
+         << fixed << setprecision(2) << phase1_time << " seconds" << endl;
     
     taos_close(conn);
     
-    // ========== 阶段2：直接分片处理 ==========
-    cout << "\n⚡ 阶段2: 直接分片处理 (" << NUM_THREADS << " 线程)..." << endl;
+    // ========== Phase 2: Direct Sharded Processing ==========
+    cout << "\n[PHASE 2] Direct sharded processing (" << NUM_THREADS << " threads)..." << endl;
     auto phase2_start = high_resolution_clock::now();
     
-    // 分配文件给各线程
+    // Distribute files to threads
     vector<vector<SubTable>> thread_tasks(NUM_THREADS);
     for (size_t i = 0; i < all_tables.size(); ++i) {
         thread_tasks[i % NUM_THREADS].push_back(all_tables[i]);
     }
     
-    // 启动监控
+    // Start monitor
     thread monitor(monitor_thread, ref(stats));
     
-    // 启动工作线程
+    // Start worker threads
     vector<thread> workers;
     for (int i = 0; i < NUM_THREADS; ++i) {
         workers.emplace_back(direct_worker_thread, i, ref(thread_tasks[i]), ref(db_name), ref(stats));
     }
     
-    // 等待完成
+    // Wait for completion
     for (auto& t : workers) t.join();
     monitor.join();
     
@@ -540,13 +540,13 @@ int main(int argc, char* argv[]) {
     double total_time = phase1_time + phase2_time;
     
     cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "✅ 导入完成!" << endl;
-    cout << "⏱️  阶段1(建表): " << fixed << setprecision(2) << phase1_time << " 秒" << endl;
-    cout << "⏱️  阶段2(插入): " << fixed << setprecision(2) << phase2_time << " 秒" << endl;
-    cout << "⏱️  总耗时: " << fixed << setprecision(2) << total_time << " 秒" << endl;
-    cout << "📊 创建表数: " << stats.created_tables << endl;
-    cout << "📊 插入行数: " << stats.inserted_records << endl;
-    cout << "📊 平均吞吐: " << (int64_t)(stats.inserted_records / total_time) << " 行/秒" << endl;
+    cout << "[OK] Import complete!" << endl;
+    cout << "[TIME] Phase 1 (create tables): " << fixed << setprecision(2) << phase1_time << " s" << endl;
+    cout << "[TIME] Phase 2 (insert data): " << fixed << setprecision(2) << phase2_time << " s" << endl;
+    cout << "[TIME] Total: " << fixed << setprecision(2) << total_time << " s" << endl;
+    cout << "[STATS] Tables created: " << stats.created_tables << endl;
+    cout << "[STATS] Rows inserted: " << stats.inserted_records << endl;
+    cout << "[STATS] Avg throughput: " << (int64_t)(stats.inserted_records / total_time) << " rows/s" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     
     taos_cleanup();

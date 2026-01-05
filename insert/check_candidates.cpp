@@ -1,14 +1,14 @@
 /*
- * 自动分类候选检测器
+ * Auto-classification Candidate Detector
  * 
- * 功能：
- * 1. 从数据库查询所有天体的数据点数
- * 2. 与历史记录文件比较，找出新增或增长>20%的天体
- * 3. 输出待分类列表
- * 4. 用新数据更新历史文件
+ * Features:
+ * 1. Query data point counts for all objects from database
+ * 2. Compare with history file to find new objects or those with >20% data growth
+ * 3. Output candidate list for classification
+ * 4. Update history file with current data
  * 
- * 使用：
- *   ./check_candidates --db <数据库名> [--threshold 0.2]
+ * Usage:
+ *   ./check_candidates --db <database_name> [--threshold 0.2]
  */
 
 #include <iostream>
@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
 
 constexpr int TAOS_PORT = 6041;
 
-// 数据结构
+// Data structures
 struct SourceInfo {
     int64_t source_id;
     int64_t healpix_id;
@@ -38,7 +38,7 @@ struct SourceInfo {
     int64_t data_count;
 };
 
-// 工具函数
+// Utility functions
 string get_taos_host() {
     const char* env_host = getenv("TAOS_HOST");
     if (env_host && strlen(env_host) > 0) return string(env_host);
@@ -53,13 +53,13 @@ vector<string> split(const string& line, char delim) {
     return result;
 }
 
-// 加载历史记录
+// Load history records
 map<int64_t, SourceInfo> load_history(const string& history_file) {
     map<int64_t, SourceInfo> history;
     
     ifstream f(history_file);
     if (!f.is_open()) {
-        cout << "📋 历史记录文件不存在，将视为首次检测" << endl;
+        cout << "[INFO] History file not found, treating as first detection" << endl;
         return history;
     }
     
@@ -82,11 +82,11 @@ map<int64_t, SourceInfo> load_history(const string& history_file) {
         }
     }
     
-    cout << "📋 加载 " << history.size() << " 条历史记录" << endl;
+    cout << "[INFO] Loaded " << history.size() << " history records" << endl;
     return history;
 }
 
-// 保存历史记录
+// Save history records
 void save_history(const string& history_file, const map<int64_t, SourceInfo>& current) {
     ofstream f(history_file);
     f << "source_id,data_count,healpix_id,ra,dec\n";
@@ -96,12 +96,12 @@ void save_history(const string& history_file, const map<int64_t, SourceInfo>& cu
           << fixed << setprecision(6) << info.ra << "," << info.dec << "\n";
     }
     
-    cout << "📋 保存 " << current.size() << " 条记录到历史文件" << endl;
+    cout << "[INFO] Saved " << current.size() << " records to history file" << endl;
 }
 
-// 保存待分类列表
+// Save candidate list for classification
 void save_candidates(const string& candidate_file, const vector<pair<SourceInfo, string>>& candidates) {
-    // 追加模式
+    // Append mode
     bool file_exists = fs::exists(candidate_file);
     ofstream f(candidate_file, ios::app);
     
@@ -116,10 +116,10 @@ void save_candidates(const string& candidate_file, const vector<pair<SourceInfo,
           << reason << "," << now << "\n";
     }
     
-    cout << "📋 追加 " << candidates.size() << " 条待分类记录" << endl;
+    cout << "[INFO] Appended " << candidates.size() << " candidates to queue" << endl;
 }
 
-// 写入进度 JSON
+// Write progress JSON
 void write_progress(int percent, const string& message, const string& status, int candidates_count = 0) {
     ofstream f("/tmp/check_candidates_progress.json");
     f << "{\"percent\":" << percent 
@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
     setbuf(stdout, NULL);
     
     string db_name = "";
-    double threshold = 0.2;  // 默认 20% 增长阈值
+    double threshold = 0.2;  // Default 20% growth threshold
     
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -142,54 +142,54 @@ int main(int argc, char* argv[]) {
     }
     
     if (db_name.empty()) {
-        cerr << "用法: " << argv[0] << " --db <数据库名> [--threshold 0.2]" << endl;
+        cerr << "Usage: " << argv[0] << " --db <database_name> [--threshold 0.2]" << endl;
         return 1;
     }
     
-    // 文件路径
+    // File paths
     string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
     string history_file = exe_path + "/../data/lc_counts_" + db_name + ".csv";
     string candidate_file = exe_path + "/../data/auto_classify_queue_" + db_name + ".csv";
     
-    cout << "\n🔍 自动分类候选检测器" << endl;
+    cout << "\n=== Auto-classification Candidate Detector ===" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "📂 数据库: " << db_name << endl;
-    cout << "📊 增长阈值: " << (threshold * 100) << "%" << endl;
+    cout << "[INFO] Database: " << db_name << endl;
+    cout << "[INFO] Growth threshold: " << (threshold * 100) << "%" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
-    write_progress(0, "连接数据库...", "running");
+    write_progress(0, "Connecting to database...", "running");
     
-    // 连接数据库
+    // Connect to database
     string taos_host = get_taos_host();
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), TAOS_PORT);
     if (!conn) {
-        cerr << "❌ 连接数据库失败" << endl;
-        write_progress(0, "连接失败", "error");
+        cerr << "[ERROR] Failed to connect to database" << endl;
+        write_progress(0, "Connection failed", "error");
         return 1;
     }
-    cout << "✅ 已连接数据库" << endl;
+    cout << "[OK] Connected to database" << endl;
     
-    // 加载历史记录
-    write_progress(10, "加载历史记录...", "running");
+    // Load history records
+    write_progress(10, "Loading history records...", "running");
     map<int64_t, SourceInfo> history = load_history(history_file);
     
-    // 从数据库查询当前所有天体的数据点数
-    write_progress(20, "查询数据库...", "running");
-    cout << "📊 查询数据库中所有天体的数据点数..." << endl;
+    // Query current data point counts for all objects from database
+    write_progress(20, "Querying database...", "running");
+    cout << "[INFO] Querying data point counts for all objects..." << endl;
     
     string sql = "SELECT source_id, healpix_id, FIRST(ra) as ra, FIRST(dec) as dec, COUNT(*) as cnt "
                  "FROM sensor_data GROUP BY source_id, healpix_id";
     
     TAOS_RES* res = taos_query(conn, sql.c_str());
     if (taos_errno(res) != 0) {
-        cerr << "❌ 查询失败: " << taos_errstr(res) << endl;
+        cerr << "[ERROR] Query failed: " << taos_errstr(res) << endl;
         taos_free_result(res);
         taos_close(conn);
-        write_progress(0, "查询失败", "error");
+        write_progress(0, "Query failed", "error");
         return 1;
     }
     
-    // 边读取边比较
+    // Read and compare simultaneously
     map<int64_t, SourceInfo> current;
     vector<pair<SourceInfo, string>> candidates;
     int new_count = 0;
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
         current[info.source_id] = info;
         read_count++;
         
-        // 边读取边比较
+        // Compare while reading
         auto it = history.find(info.source_id);
         if (it == history.end()) {
             candidates.push_back({info, "new"});
@@ -225,42 +225,42 @@ int main(int argc, char* argv[]) {
             }
         }
         
-        // 每 0.2 秒更新一次进度
+        // Update progress every 0.2 seconds
         auto now = chrono::steady_clock::now();
         if (chrono::duration_cast<chrono::milliseconds>(now - last_update).count() >= 200) {
-            string msg = "已读取 " + to_string(read_count) + " 条，待分类 " + to_string(candidates.size());
+            string msg = "Read " + to_string(read_count) + " records, " + to_string(candidates.size()) + " candidates";
             write_progress(30, msg, "running", candidates.size());
-            cout << "\r📊 " << msg << "    " << flush;
+            cout << "\r[INFO] " << msg << "    " << flush;
             last_update = now;
         }
     }
     taos_free_result(res);
     taos_close(conn);
     
-    cout << "\r✅ 读取完成: " << current.size() << " 个天体，待分类 " << candidates.size() << "    " << endl;
+    cout << "\r[OK] Read complete: " << current.size() << " objects, " << candidates.size() << " candidates    " << endl;
     
-    write_progress(80, "保存结果...", "running", candidates.size());
+    write_progress(80, "Saving results...", "running", candidates.size());
     
-    cout << "📊 检测结果：" << endl;
-    cout << "   • 新增天体: " << new_count << endl;
-    cout << "   • 数据增长: " << growth_count << endl;
-    cout << "   • 总计待分类: " << candidates.size() << endl;
+    cout << "[INFO] Detection results:" << endl;
+    cout << "   - New objects: " << new_count << endl;
+    cout << "   - Data growth: " << growth_count << endl;
+    cout << "   - Total candidates: " << candidates.size() << endl;
     
-    // 保存候选列表
-    write_progress(80, "保存结果...", "running");
+    // Save candidate list
+    write_progress(80, "Saving results...", "running");
     if (!candidates.empty()) {
         save_candidates(candidate_file, candidates);
     }
     
-    // 更新历史文件
-    write_progress(90, "更新历史...", "running");
+    // Update history file
+    write_progress(90, "Updating history...", "running");
     save_history(history_file, current);
     
-    write_progress(100, "完成", "completed", candidates.size());
+    write_progress(100, "Complete", "completed", candidates.size());
     
     cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    cout << "✅ 检测完成！" << endl;
-    cout << "📋 待分类天体: " << candidates.size() << endl;
+    cout << "[OK] Detection complete!" << endl;
+    cout << "[INFO] Candidates for classification: " << candidates.size() << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     
     return 0;
