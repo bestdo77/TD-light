@@ -1,115 +1,117 @@
-# TDlight Web 服务
+English | [中文](README_CN.md)
 
-## 功能概述
+# TDlight Web Service
 
-提供完整的光变曲线数据管理和分类 Web 服务。
+## Overview
 
-### 核心功能
+Provides a complete web service for light curve data management and classification.
 
-| 功能 | 说明 |
-|------|------|
-| 📋 天体列表 | 浏览数据库中的天体 |
-| 📈 光变曲线 | 查看时序观测数据和可视化 |
-| 🔍 空间检索 | 锥形检索和区域检索 |
-| 🌌 天图显示 | 3D 可视化天体分布 |
-| 🤖 智能分类 | LightGBM 模型实时分类 |
-| 📥 数据导入 | CSV 数据批量导入 |
-| ⚙️ 数据库管理 | 多数据库切换 |
+### Core Features
+
+| Feature | Description |
+|---------|-------------|
+| 📋 Object List | Browse objects in database |
+| 📈 Light Curves | View time-series observation data and visualization |
+| 🔍 Spatial Search | Cone search and region search |
+| 🌌 Sky Map | 3D visualization of object distribution |
+| 🤖 Intelligent Classification | Real-time classification using LightGBM model |
+| 📥 Data Import | Batch import of CSV data |
+| ⚙️ Database Management | Multi-database switching |
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 启动服务
+### 1. Start Service
 
 ```bash
 cd TDlight
 ./start_env.sh
-# 进入容器后
+# After entering container
 cd /app/web
 ./web_api
 ```
 
-### 2. 访问界面
+### 2. Access Interface
 
-浏览器打开：**http://localhost:5001**
-
----
-
-## 使用说明
-
-### 天体浏览
-
-1. 打开页面后自动加载天体列表
-2. 点击任意天体查看光变曲线
-3. 使用搜索框按 source_id 搜索
-
-### 空间检索
-
-**锥形检索**（以某点为圆心）：
-- 输入 RA、DEC（度）和半径（度）
-- 点击"搜索"
-
-**区域检索**（矩形区域）：
-- 输入 RA/DEC 的最小值和最大值
-- 点击"搜索"
-
-### 天体分类
-
-1. 选择分类方式：
-   - **随机分类**：从数据库随机选取天体
-   - **可见天体**：分类当前列表中的天体
-2. 设置置信度阈值（仅高于阈值的结果写入数据库）
-3. 点击"开始分类"
-4. 实时查看进度和结果
-
-### 数据导入
-
-⚠️ **导入光变曲线前必须准备**：
-1. 光变曲线 CSV 目录（每个天体一个文件）
-2. 坐标文件（包含所有天体的 RA/DEC）
-
-**操作步骤**：
-1. 切换到"数据导入"标签
-2. 填写数据库名称
-3. 填写 CSV 目录路径（容器内路径）
-4. 填写坐标文件路径（容器内路径）
-5. 点击"开始导入"
-6. 实时查看导入进度和日志
-
-**路径说明**：
-- 如果数据在宿主机，需通过 `--bind` 挂载到容器
-- 例如宿主机 `/data/gaia` 挂载为 `/app/data/gaia`
-
-### 配置管理
-
-在"系统设置"标签可以：
-- 修改数据库连接参数
-- 修改分类模型路径
-- 修改 Python 环境路径
-- 点击"保存配置"保存到本地
-- 点击"应用到后端"使配置生效
+Open browser: **http://localhost:5001**
 
 ---
 
-## 分类模型
+## User Guide
 
-使用 **LightGBM 模型**，支持 10 类变星分类：
+### Object Browsing
 
-| 编号 | 类型 | 说明 |
-|------|------|------|
-| 0 | Non-var | 非变星 |
-| 1 | ROT | 旋转变星 |
-| 2 | EA | Algol 型食双星 |
-| 3 | EW | 大熊座 W 型食双星 |
-| 4 | CEP | 造父变星 |
-| 5 | DSCT | 盾牌座 δ 型变星 |
-| 6 | RRAB | 天琴座 RR 型 (ab亚型) |
-| 7 | RRC | 天琴座 RR 型 (c亚型) |
-| 8 | M | 米拉型变星 |
-| 9 | SR | 半规则变星 |
+1. Object list loads automatically when page opens
+2. Click any object to view light curve
+3. Use search box to search by source_id
 
-### 使用的特征（15个）
+### Spatial Search
+
+**Cone Search** (centered on a point):
+- Enter RA, DEC (degrees) and radius (degrees)
+- Click "Search"
+
+**Region Search** (rectangular area):
+- Enter min/max values for RA/DEC
+- Click "Search"
+
+### Object Classification
+
+1. Select classification method:
+   - **Random Classification**: Randomly select objects from database
+   - **Visible Objects**: Classify objects in current list
+2. Set confidence threshold (only results above threshold are written to database)
+3. Click "Start Classification"
+4. View real-time progress and results
+
+### Data Import
+
+⚠️ **Before importing light curves, prepare**:
+1. Light curve CSV directory (one file per object)
+2. Coordinate file (containing RA/DEC for all objects)
+
+**Steps**:
+1. Switch to "Data Import" tab
+2. Enter database name
+3. Enter CSV directory path (container path)
+4. Enter coordinate file path (container path)
+5. Click "Start Import"
+6. View real-time import progress and logs
+
+**Path Notes**:
+- If data is on host machine, mount to container via `--bind`
+- e.g., host `/data/gaia` mounted as `/app/data/gaia`
+
+### Configuration Management
+
+In "System Settings" tab you can:
+- Modify database connection parameters
+- Modify classification model path
+- Modify Python environment path
+- Click "Save Config" to save locally
+- Click "Apply to Backend" to make configuration effective
+
+---
+
+## Classification Model
+
+Uses **LightGBM model**, supports 10-class variable star classification:
+
+| Code | Type | Description |
+|------|------|-------------|
+| 0 | Non-var | Non-variable star |
+| 1 | ROT | Rotational variable |
+| 2 | EA | Algol-type eclipsing binary |
+| 3 | EW | W Ursae Majoris-type eclipsing binary |
+| 4 | CEP | Cepheid variable |
+| 5 | DSCT | Delta Scuti variable |
+| 6 | RRAB | RR Lyrae type ab |
+| 7 | RRC | RR Lyrae type c |
+| 8 | M | Mira variable |
+| 9 | SR | Semi-regular variable |
+
+### Features Used (15)
 
 ```
 PeriodLS, Mean, Rcs, Psi_eta, StetsonK_AC,
@@ -119,71 +121,71 @@ LinearTrend, Freq1_harmonics_amplitude_0, AndersonDarling, MaxSlope, StetsonK
 
 ---
 
-## API 接口
+## API Endpoints
 
-### 天体查询
+### Object Query
 
-| 接口 | 方法 | 参数 | 说明 |
-|------|------|------|------|
-| `/api/objects` | GET | `limit` | 获取天体列表 |
-| `/api/object/{table_name}` | GET | - | 获取天体详情 |
-| `/api/object_by_id` | GET | `id` | 按 source_id 查询 |
+| Endpoint | Method | Parameters | Description |
+|----------|--------|------------|-------------|
+| `/api/objects` | GET | `limit` | Get object list |
+| `/api/object/{table_name}` | GET | - | Get object details |
+| `/api/object_by_id` | GET | `id` | Query by source_id |
 
-### 光变曲线
+### Light Curve
 
-| 接口 | 方法 | 参数 | 说明 |
-|------|------|------|------|
-| `/api/lightcurve/{table_name}` | GET | `time_start`, `time_end` | 获取观测数据 |
+| Endpoint | Method | Parameters | Description |
+|----------|--------|------------|-------------|
+| `/api/lightcurve/{table_name}` | GET | `time_start`, `time_end` | Get observation data |
 
-### 空间检索
+### Spatial Search
 
-| 接口 | 方法 | 参数 | 说明 |
-|------|------|------|------|
-| `/api/cone_search` | GET | `ra`, `dec`, `radius` | 锥形检索 |
-| `/api/region_search` | GET | `ra_min/max`, `dec_min/max` | 区域检索 |
-| `/api/sky_map` | GET | `limit` | 天图数据 |
+| Endpoint | Method | Parameters | Description |
+|----------|--------|------------|-------------|
+| `/api/cone_search` | GET | `ra`, `dec`, `radius` | Cone search |
+| `/api/region_search` | GET | `ra_min/max`, `dec_min/max` | Region search |
+| `/api/sky_map` | GET | `limit` | Sky map data |
 
-### 分类
+### Classification
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/classify` | POST | 分类指定天体（SSE 流） |
-| `/api/classify/stop` | POST | 停止分类任务 |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/classify` | POST | Classify specified objects (SSE stream) |
+| `/api/classify/stop` | POST | Stop classification task |
 
-### 数据导入
+### Data Import
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/import/start` | POST | 启动导入任务 |
-| `/api/import/stop` | POST | 停止导入任务 |
-| `/api/import/stream` | GET | 导入进度（SSE 流） |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/import/start` | POST | Start import task |
+| `/api/import/stop` | POST | Stop import task |
+| `/api/import/stream` | GET | Import progress (SSE stream) |
 
-### 数据库管理
+### Database Management
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/databases` | GET | 获取数据库列表 |
-| `/api/databases/drop` | POST | 删除数据库 |
-| `/api/config` | GET | 获取当前配置 |
-| `/api/config/reload` | GET | 重新加载配置 |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/databases` | GET | Get database list |
+| `/api/databases/drop` | POST | Delete database |
+| `/api/config` | GET | Get current configuration |
+| `/api/config/reload` | GET | Reload configuration |
 
 ---
 
-## API 示例
+## API Examples
 
-### 锥形检索
+### Cone Search
 
 ```bash
 curl "http://localhost:5001/api/cone_search?ra=180&dec=30&radius=0.1"
 ```
 
-### 获取光变曲线
+### Get Light Curve
 
 ```bash
 curl "http://localhost:5001/api/lightcurve/t_5870536848431465216"
 ```
 
-### 分类天体
+### Classify Object
 
 ```bash
 curl -X POST "http://localhost:5001/api/classify" \
@@ -193,84 +195,84 @@ curl -X POST "http://localhost:5001/api/classify" \
 
 ---
 
-## 编译说明
+## Compilation
 
-如需修改后端代码：
+If you need to modify backend code:
 
 ```bash
 cd TDlight/web
 ./build.sh
 ```
 
-编译需要：
-- g++ (支持 C++17)
-- TDengine 客户端库
-- HEALPix C++ 库
+Compilation requires:
+- g++ (C++17 support)
+- TDengine client library
+- HEALPix C++ library
 
 ---
 
-## 文件结构
+## File Structure
 
 ```
 web/
-├── web_api.cpp           # C++ 后端源码
-├── web_api               # 编译后的可执行文件
-├── build.sh              # 编译脚本
-├── index.html            # 前端 HTML
-├── app.js                # 前端 JavaScript
-├── classify_pipeline.py  # Python 分类脚本
-└── README.md             # 本文档
+├── web_api.cpp           # C++ backend source
+├── web_api               # Compiled executable
+├── build.sh              # Build script
+├── index.html            # Frontend HTML
+├── app.js                # Frontend JavaScript
+├── classify_pipeline.py  # Python classification script
+└── README.md             # This document
 ```
 
 ---
 
-## 常见问题
+## Troubleshooting
 
-### 1. 连接 TDengine 失败
+### 1. TDengine Connection Failed
 
-- 确认 taosd 服务正在运行
-- 确认在 Apptainer 容器内执行
-- 检查 config.json 中的数据库配置
+- Confirm taosd service is running
+- Confirm running inside Apptainer container
+- Check database configuration in config.json
 
-### 2. 分类失败
+### 2. Classification Failed
 
-- 确认模型文件存在（classifier/*.pkl）
-- 确认 Python 环境路径正确
-- 检查 config.json 中的 paths.python
+- Confirm model files exist (classifier/*.pkl)
+- Confirm Python environment path is correct
+- Check paths.python in config.json
 
-### 3. 数据导入无响应
+### 3. Data Import Not Responding
 
-- 确认路径是容器内路径
-- 检查坐标文件是否存在
-- 查看 /tmp/import.log 中的错误信息
+- Confirm path is container path
+- Check if coordinate file exists
+- Check error messages in /tmp/import.log
 
-### 4. 端口被占用
+### 4. Port Already in Use
 
 ```bash
 pkill -f web_api
-# 或
+# or
 kill $(lsof -t -i:5001)
 ```
 
 ---
 
-## 性能参考
+## Performance Reference
 
-| 操作 | 典型耗时 |
-|------|---------|
-| 天体列表 (200条) | 50-200 ms |
-| 单条光变曲线 | 10-50 ms |
-| 锥形检索 (r=0.1°) | 20-100 ms |
-| 单天体分类 | 400-600 ms |
-| 批量分类 (每个) | ~50 ms |
+| Operation | Typical Time |
+|-----------|--------------|
+| Object list (200 items) | 50-200 ms |
+| Single light curve | 10-50 ms |
+| Cone search (r=0.1°) | 20-100 ms |
+| Single object classification | 400-600 ms |
+| Batch classification (per item) | ~50 ms |
 
 ---
 
-## 更新日志
+## Changelog
 
 ### v2.0 (2026-01)
 
-- SSE 实时进度更新
-- 数据导入功能集成
-- 动态配置管理
-- 改进的错误处理
+- SSE real-time progress updates
+- Data import integration
+- Dynamic configuration management
+- Improved error handling

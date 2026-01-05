@@ -1,59 +1,61 @@
-# TDengine 光变曲线分类器
+English | [中文](README_CN.md)
 
-## 功能说明
+# TDengine Light Curve Classifier
 
-本模块实现基于 LightGBM 的光变曲线自动分类流水线：
+## Overview
 
-1. 读取指定的 ID 列表
-2. 从 TDengine 读取光变曲线数据
-3. 提取 15 个核心特征（使用 feets 库）
-4. 使用预训练模型进行 10 类分类
-5. 输出置信度和分类结果
-6. 当置信度 >= 阈值时，更新 TDengine 中的分类标签
+This module implements an automated light curve classification pipeline based on LightGBM:
 
-### 支持的类别
+1. Read specified ID list
+2. Fetch light curve data from TDengine
+3. Extract 15 core features (using feets library)
+4. Perform 10-class classification using pre-trained model
+5. Output confidence scores and classification results
+6. Update classification labels in TDengine when confidence >= threshold
 
-| 编号 | 类别名 | 说明 |
-|------|--------|------|
-| 0 | Non-var | 非变星 |
-| 1 | ROT | 旋转变星 |
-| 2 | EA | Algol 型食双星 |
-| 3 | EW | 大熊座 W 型食双星 |
-| 4 | CEP | 造父变星 |
-| 5 | DSCT | 盾牌座 δ 型变星 |
-| 6 | RRAB | 天琴座 RR 型 (ab亚型) |
-| 7 | RRC | 天琴座 RR 型 (c亚型) |
-| 8 | M | 米拉型变星 |
-| 9 | SR | 半规则变星 |
+### Supported Classes
+
+| Code | Class | Description |
+|------|-------|-------------|
+| 0 | Non-var | Non-variable star |
+| 1 | ROT | Rotational variable |
+| 2 | EA | Algol-type eclipsing binary |
+| 3 | EW | W Ursae Majoris-type eclipsing binary |
+| 4 | CEP | Cepheid variable |
+| 5 | DSCT | Delta Scuti variable |
+| 6 | RRAB | RR Lyrae type ab |
+| 7 | RRC | RR Lyrae type c |
+| 8 | M | Mira variable |
+| 9 | SR | Semi-regular variable |
 
 ---
 
-## 环境要求
+## Requirements
 
-### Python 环境
+### Python Environment
 
-本脚本必须在 **feets** conda 环境中运行：
+This script must run in the **feets** conda environment:
 
 ```bash
 conda activate feets
 ```
 
-该环境包含以下关键依赖：
+Required dependencies:
 - Python 3.9
-- feets 0.4 (特征提取库)
-- lightgbm (分类模型)
+- feets 0.4 (feature extraction library)
+- lightgbm (classification model)
 - pandas, numpy
 - requests (REST API)
-- joblib (模型加载)
+- joblib (model loading)
 
-### TDengine 要求
+### TDengine Requirements
 
-1. **taosd 服务** 必须运行（端口 6041）
-2. **taosAdapter** 必须运行（端口 6044，用于 REST API）
+1. **taosd service** must be running (port 6041)
+2. **taosAdapter** must be running (port 6044, for REST API)
 
-### 启动 taosAdapter
+### Starting taosAdapter
 
-如果 taosAdapter 未运行，使用以下命令启动：
+If taosAdapter is not running, start it with:
 
 ```bash
 cd /mnt/nvme/home/yxh/code/TDengine-test
@@ -65,38 +67,38 @@ nohup /mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
     taosadapter > runtime/taos_home/log/taosadapter.log 2>&1 &
 ```
 
-验证 taosAdapter 运行状态：
+Verify taosAdapter is running:
 ```bash
 ss -tuln | grep 6044
-# 应显示: tcp LISTEN 0 4096 *:6044 *:*
+# Should show: tcp LISTEN 0 4096 *:6044 *:*
 ```
 
 ---
 
-## 关键路径
+## Key Paths
 
 ```
-项目根目录: /mnt/nvme/home/yxh/code/TDengine-test/runtime-final/class
-├── classify_pipeline.py          # 主脚本
-└── README.md                     # 本文档
+Project root: /mnt/nvme/home/yxh/code/TDengine-test/runtime-final/class
+├── classify_pipeline.py          # Main script
+└── README.md                     # This document
 
-模型文件: /mnt/nvme/home/yxh/code/leaves-retrain/results/
+Model files: /mnt/nvme/home/yxh/code/leaves-retrain/results/
 └── lgbm_111w_15features_tuned_20251226_114818/
-    ├── lgbm_111w_model.pkl       # 训练好的 LightGBM 模型
-    └── metadata.pkl              # 类别映射等元数据
+    ├── lgbm_111w_model.pkl       # Trained LightGBM model
+    └── metadata.pkl              # Class mapping and metadata
 ```
 
 ---
 
-## 使用方法
+## Usage
 
-### 基本用法
+### Basic Usage
 
 ```bash
 cd /mnt/nvme/home/yxh/code/TDengine-test/runtime-final/class
 conda activate feets
 
-# 干跑模式（只预测，不更新数据库）
+# Dry run mode (predict only, no database update)
 python classify_pipeline.py \
     --input test_ids.csv \
     --output results.csv \
@@ -104,10 +106,10 @@ python classify_pipeline.py \
     --dry-run
 ```
 
-### 执行数据库更新
+### Execute Database Update
 
 ```bash
-# 实际更新数据库（置信度 >= 0.95 的样本）
+# Actually update database (samples with confidence >= 0.95)
 python classify_pipeline.py \
     --input test_ids.csv \
     --output results.csv \
@@ -115,25 +117,25 @@ python classify_pipeline.py \
     --update
 ```
 
-### 完整参数说明
+### Complete Parameter Reference
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--input` | (必填) | 输入 ID 列表文件 (CSV，需包含 ID 列) |
-| `--output` | (必填) | 输出结果文件 (CSV) |
-| `--threshold` | 0.95 | 置信度阈值，超过此值才更新标签 |
-| `--db` | catalog_test | 数据库名 |
-| `--host` | localhost | 数据库主机 |
-| `--port` | 6044 | REST API 端口 (taosAdapter) |
-| `--table` | sensor_data | 超级表名 |
-| `--model` | (见代码) | 模型文件路径 |
-| `--update` | False | 执行实际更新（写入 TDengine） |
-| `--dry-run` | False | 干跑模式（只输出结果） |
-| `--verbose, -v` | False | 详细输出模式 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--input` | (required) | Input ID list file (CSV, must contain ID column) |
+| `--output` | (required) | Output result file (CSV) |
+| `--threshold` | 0.95 | Confidence threshold for label updates |
+| `--db` | catalog_test | Database name |
+| `--host` | localhost | Database host |
+| `--port` | 6044 | REST API port (taosAdapter) |
+| `--table` | sensor_data | Super table name |
+| `--model` | (see code) | Model file path |
+| `--update` | False | Execute actual update (write to TDengine) |
+| `--dry-run` | False | Dry run mode (output only) |
+| `--verbose, -v` | False | Verbose output mode |
 
-### 输入文件格式
+### Input File Format
 
-CSV 文件，必须包含 `ID` 或 `source_id` 列：
+CSV file must contain `ID` or `source_id` column:
 
 ```csv
 ID,Class
@@ -142,7 +144,7 @@ ID,Class
 6073590601358642432,Unknown
 ```
 
-### 输出文件格式
+### Output File Format
 
 ```csv
 ID,Original_Class,Predicted_Class,Confidence,Updated_Class,Update_Status,Data_Points
@@ -150,121 +152,120 @@ ID,Original_Class,Predicted_Class,Confidence,Updated_Class,Update_Status,Data_Po
 423946158683096960,Unknown,DSCT,0.6610,Unknown,low_confidence,253
 ```
 
-字段说明：
-- `ID`: 源ID
-- `Original_Class`: 原始类别
-- `Predicted_Class`: 模型预测类别
-- `Confidence`: 预测置信度
-- `Updated_Class`: 最终类别（更新后）
-- `Update_Status`: 状态 (db_updated/low_confidence/no_data/error)
-- `Data_Points`: 光变曲线数据点数
+Field descriptions:
+- `ID`: Source ID
+- `Original_Class`: Original class
+- `Predicted_Class`: Model predicted class
+- `Confidence`: Prediction confidence
+- `Updated_Class`: Final class (after update)
+- `Update_Status`: Status (db_updated/low_confidence/no_data/error)
+- `Data_Points`: Number of light curve data points
 
 ---
 
-## 性能参考
+## Performance Reference
 
-在当前硬件环境下的典型性能：
+Typical performance on current hardware:
 
-| 操作 | 平均时间 | 说明 |
-|------|---------|------|
-| 模型加载 | ~1.2 秒 | 一次性 |
-| 特征空间初始化 | ~1 毫秒 | 一次性 |
-| 数据库查询 | ~92 毫秒 | 每样本 |
-| 特征提取 | ~343 毫秒 | 每样本（**主要瓶颈**） |
-| 单样本推理 | ~17 毫秒 | 每样本 |
-| 批量推理 | ~0.5 毫秒 | 每样本 |
+| Operation | Average Time | Notes |
+|-----------|--------------|-------|
+| Model loading | ~1.2 s | One-time |
+| Feature space init | ~1 ms | One-time |
+| Database query | ~92 ms | Per sample |
+| Feature extraction | ~343 ms | Per sample (**main bottleneck**) |
+| Single sample inference | ~17 ms | Per sample |
+| Batch inference | ~0.5 ms | Per sample |
 
-**理论吞吐量**: ~2.2 样本/秒
+**Theoretical throughput**: ~2.2 samples/second
 
-**主要瓶颈**: 特征提取（Lomb-Scargle 周期搜索计算密集）
-
----
-
-## 15 个核心特征
-
-| 序号 | 特征名 | 说明 |
-|------|--------|------|
-| 1 | PeriodLS | Lomb-Scargle 周期 |
-| 2 | Mean | 平均星等 |
-| 3 | Rcs | 累积和距离 |
-| 4 | Psi_eta | 相位折叠 η 统计 |
-| 5 | StetsonK_AC | 自相关 Stetson K |
-| 6 | Gskew | 光变曲线偏度 |
-| 7 | Psi_CS | 相位折叠累积和 |
-| 8 | Skew | 偏度 |
-| 9 | Freq1_harmonics_amplitude_1 | 第一谐波振幅 |
-| 10 | Eta_e | η 统计量 |
-| 11 | LinearTrend | 线性趋势 |
-| 12 | Freq1_harmonics_amplitude_0 | 基波振幅 |
-| 13 | AndersonDarling | Anderson-Darling 统计量 |
-| 14 | MaxSlope | 最大斜率 |
-| 15 | StetsonK | Stetson K 统计量 |
+**Main bottleneck**: Feature extraction (Lomb-Scargle period search is computationally intensive)
 
 ---
 
-## 常见问题
+## 15 Core Features
 
-### 1. "模型文件不存在"
+| # | Feature Name | Description |
+|---|--------------|-------------|
+| 1 | PeriodLS | Lomb-Scargle period |
+| 2 | Mean | Mean magnitude |
+| 3 | Rcs | Cumulative sum range |
+| 4 | Psi_eta | Phase-folded η statistic |
+| 5 | StetsonK_AC | Autocorrelated Stetson K |
+| 6 | Gskew | Light curve skewness |
+| 7 | Psi_CS | Phase-folded cumulative sum |
+| 8 | Skew | Skewness |
+| 9 | Freq1_harmonics_amplitude_1 | First harmonic amplitude |
+| 10 | Eta_e | η statistic |
+| 11 | LinearTrend | Linear trend |
+| 12 | Freq1_harmonics_amplitude_0 | Fundamental amplitude |
+| 13 | AndersonDarling | Anderson-Darling statistic |
+| 14 | MaxSlope | Maximum slope |
+| 15 | StetsonK | Stetson K statistic |
 
-确认模型路径正确：
+---
+
+## Troubleshooting
+
+### 1. "Model file does not exist"
+
+Verify model path is correct:
 ```bash
 ls -la /mnt/nvme/home/yxh/code/leaves-retrain/results/lgbm_111w_15features_tuned_20251226_114818/
 ```
 
-### 2. "数据库连接失败"
+### 2. "Database connection failed"
 
-检查 taosAdapter 是否运行：
+Check if taosAdapter is running:
 ```bash
 ss -tuln | grep 6044
 curl -s -u root:taosdata "http://localhost:6044/rest/sql" -d "SELECT 1"
 ```
 
-### 3. "Table does not exist" 更新失败
+### 3. "Table does not exist" update failure
 
-子表命名规则是 `t_{source_id}`，确认表存在：
+Sub-table naming convention is `t_{source_id}`, verify table exists:
 ```bash
-# 通过 Apptainer 执行
+# Execute via Apptainer
 apptainer exec ... taos -s "USE catalog_test; SHOW TABLES LIKE 't_5870536848431465216';"
 ```
 
-### 4. feets 警告信息
+### 4. feets warning messages
 
-feets 库会输出一些警告（如 AndersonDarling、StetsonK 的值范围），这是正常的，不影响结果。
+feets library outputs some warnings (e.g., AndersonDarling, StetsonK value ranges), this is normal and doesn't affect results.
 
-### 5. 代理导致连接失败
+### 5. Proxy causing connection failure
 
-脚本内部已禁用代理（`session.trust_env = False`），如果仍有问题：
+The script internally disables proxy (`session.trust_env = False`), if issues persist:
 ```bash
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 ```
 
 ---
 
-## 扩展开发
+## Extension Development
 
-### 修改默认配置
+### Modify Default Configuration
 
-编辑 `classify_pipeline.py` 开头的配置区域：
+Edit the configuration section at the beginning of `classify_pipeline.py`:
 
 ```python
 DB_HOST = "localhost"
-DB_PORT = 6044  # REST API 端口
+DB_PORT = 6044  # REST API port
 DB_NAME = "catalog_test"
 SUPER_TABLE = "sensor_data"
 MODEL_PATH = "/path/to/model.pkl"
 ```
 
-### 添加新特征
+### Add New Features
 
-1. 修改 `SELECTED_FEATURES` 列表
-2. 确保模型是用相同特征训练的
-3. 更新 metadata.pkl 中的特征列表
+1. Modify `SELECTED_FEATURES` list
+2. Ensure model was trained with the same features
+3. Update feature list in metadata.pkl
 
-### 使用不同模型
+### Use Different Model
 
 ```bash
 python classify_pipeline.py --model /path/to/new_model.pkl ...
 ```
 
-确保新模型目录下有对应的 `metadata.pkl` 文件。
-
+Ensure the new model directory contains a corresponding `metadata.pkl` file.

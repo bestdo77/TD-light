@@ -1,219 +1,220 @@
+English | [中文](README_CN.md)
+
 # TDlight
 
-基于 TDengine 时序数据库的天文光变曲线管理与分类系统。
+A light curve management and classification system for time-domain astronomy, powered by TDengine time-series database.
 
-支持大规模天文时序数据的高效存储、快速检索和智能分类。
-
----
-
-## 技术栈
-
-| 层级 | 技术 | 说明 |
-|------|------|------|
-| **数据库** | TDengine 3.x | 高性能时序数据库 |
-| **后端** | C++17 | HTTP 服务器、HEALPix 空间索引 |
-| **分类** | Python + LightGBM | feets 特征提取 + 机器学习 |
-| **前端** | HTML/JS | Three.js 3D、Chart.js 图表 |
-| **容器** | Apptainer | TDengine 运行环境 |
+Supports efficient storage, fast retrieval, and intelligent classification of large-scale astronomical time-series data.
 
 ---
 
-## 功能特性
+## Tech Stack
 
-| 功能 | 说明 |
-|------|------|
-|  **锥形检索** | 以天球坐标为中心，按半径搜索天体 |
-|  **矩形检索** | 按 RA/DEC 范围批量查询 |
-|  **光变曲线可视化** | 交互式图表展示时序测光数据 |
-|  **智能分类** | 基于 LightGBM 的变星自动分类 |
-| 🤖 **自动分类** | 导入时自动检测待分类天体，分批后台处理 |
-|  **数据导入** | Web 界面一键导入 CSV 格式数据 |
-| 🌍 **3D 天球** | WebGL 渲染的三维天球可视化 |
+| Layer | Technology | Description |
+|-------|------------|-------------|
+| **Database** | TDengine 3.x | High-performance time-series database |
+| **Backend** | C++17 | HTTP server, HEALPix spatial indexing |
+| **Classification** | Python + LightGBM | feets feature extraction + machine learning |
+| **Frontend** | HTML/JS | Three.js 3D, Chart.js visualization |
+| **Container** | Apptainer | TDengine runtime environment |
 
 ---
 
-## 系统架构
+## Features
+
+| Feature | Description |
+|---------|-------------|
+|  **Cone Search** | Search objects by celestial coordinates and radius |
+|  **Region Search** | Batch query by RA/DEC range |
+|  **Light Curve Visualization** | Interactive charts for time-series photometry |
+|  **Intelligent Classification** | Automated variable star classification using LightGBM |
+| 🤖 **Auto Classification** | Automatically detect and classify new objects in batches |
+|  **Data Import** | One-click CSV data import via web interface |
+| 🌍 **3D Celestial Sphere** | WebGL-rendered 3D visualization |
+
+---
+
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        浏览器 (前端)                              │
-│   index.html + app.js (Three.js 3D / Chart.js / SSE 实时通信)    │
+│                        Browser (Frontend)                        │
+│   index.html + app.js (Three.js 3D / Chart.js / SSE real-time)  │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ HTTP/SSE
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      web_api (C++ 后端)                          │
+│                      web_api (C++ Backend)                       │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │  检索 API   │  │  分类 API   │  │      数据导入 API        │  │
+│  │ Search API  │  │Classify API │  │    Data Import API      │  │
 │  │ cone_search │  │  classify   │  │  catalog_importer       │  │
-│  │region_search│  │  (调用 Py)  │  │  lightcurve_importer    │  │
+│  │region_search│  │ (calls Py)  │  │  lightcurve_importer    │  │
 │  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
 │         │                │                     │                │
 │         ▼                ▼                     ▼                │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    TDengine C 客户端                         ││
+│  │                    TDengine C Client                         ││
 │  │                      (libtaos.so)                            ││
 │  └──────────────────────────────┬──────────────────────────────┘│
 └─────────────────────────────────┼───────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   TDengine 时序数据库 (Apptainer 容器)            │
+│              TDengine Time-series Database (Apptainer)           │
 │                                                                 │
-│   超级表: lightcurves                                            │
-│   ├── 标签: healpix_id, source_id, ra, dec, cls                 │
-│   └── 数据: ts, band, mag, mag_error, flux, flux_error, jd_tcb  │
+│   Super Table: lightcurves                                      │
+│   ├── Tags: healpix_id, source_id, ra, dec, cls                 │
+│   └── Columns: ts, band, mag, mag_error, flux, flux_error, jd   │
 │                                                                 │
-│   VGroups: 128 (支持约 2 个完整数据库)                            │
+│   VGroups: 128 (supports ~2 complete databases)                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 组件连接说明
+### Component Connections
 
-1. **前端 (index.html + app.js)**
-   - 使用 Fetch API 调用后端 REST 接口
-   - 使用 Server-Sent Events (SSE) 接收分类/导入进度
-   - Three.js 渲染 3D 天球，Chart.js 绘制光变曲线
+1. **Frontend (index.html + app.js)**
+   - Uses Fetch API to call backend REST endpoints
+   - Receives classification/import progress via Server-Sent Events (SSE)
+   - Three.js renders 3D celestial sphere, Chart.js draws light curves
 
-2. **后端 (web_api.cpp)**
-   - 纯 C++ 实现的 HTTP 服务器
-   - 使用 HEALPix 进行天球像素化加速检索
-   - 通过 `system()` 调用 Python 分类脚本
-   - 通过 `system()` 调用 C++ 导入器
+2. **Backend (web_api.cpp)**
+   - Pure C++ HTTP server implementation
+   - Uses HEALPix for celestial sphere pixelization to accelerate searches
+   - Invokes Python classification scripts via `system()`
+   - Invokes C++ importers via `system()`
 
-3. **分类模块 (classify_pipeline.py)**
-   - 由 web_api 通过子进程调用
-   - 使用 feets 库提取光变曲线特征
-   - 使用预训练 LightGBM 模型进行分类
-   - 高置信度结果自动写回 TDengine
+3. **Classification Module (classify_pipeline.py)**
+   - Called by web_api as a subprocess
+   - Extracts light curve features using feets library
+   - Classifies using pre-trained LightGBM model
+   - Automatically writes high-confidence results back to TDengine
 
-4. **数据导入器 (catalog_importer / lightcurve_importer)**
-   - 独立 C++ 程序，64 线程并行导入
-   - 通过 web_api 启动，进度通过文件通信
-   - 前端通过 SSE 实时显示进度
+4. **Data Importers (catalog_importer / lightcurve_importer)**
+   - Standalone C++ programs with 64-thread parallel import
+   - Launched by web_api, progress communicated via files
+   - Frontend displays real-time progress via SSE
 
 ---
 
-## 运行环境
+## Runtime Environment
 
-### 环境概述
+### Environment Overview
 
-本系统使用 **Conda 管理环境** + **Apptainer 容器运行 TDengine**：
+This system uses **Conda for environment management** + **Apptainer container for TDengine**:
 
-- Apptainer 通过 Conda 安装
-- TDengine 服务运行在 Apptainer 容器内
-- Web 服务和分类脚本运行在容器外（Conda 环境）
-- 容器通过挂载访问 Conda 环境和数据文件
+- Apptainer installed via Conda
+- TDengine service runs inside Apptainer container
+- Web service and classification scripts run outside container (Conda environment)
+- Container accesses Conda environment and data files via mounts
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                     宿主机 (Linux)                        │
+│                     Host Machine (Linux)                  │
 │                                                          │
 │  ┌─────────────────────────────────────────────────────┐ │
-│  │              Conda 环境 (tdlight / feets)           │ │
+│  │           Conda Environment (tdlight / feets)       │ │
 │  │                                                     │ │
 │  │   Python 3.10 + numpy + lightgbm + feets + taospy   │ │
-│  │   apptainer (通过 conda-forge 安装)                  │ │
+│  │   apptainer (installed via conda-forge)             │ │
 │  │                                                     │ │
-│  │   运行: web_api, classify_pipeline.py, importers    │ │
+│  │   Runs: web_api, classify_pipeline.py, importers    │ │
 │  └─────────────────────────────────────────────────────┘ │
 │                          │                               │
-│                          │ 挂载                          │
+│                          │ Mount                         │
 │                          ▼                               │
 │  ┌─────────────────────────────────────────────────────┐ │
-│  │           Apptainer 容器 (tdengine-fs)              │ │
+│  │           Apptainer Container (tdengine-fs)         │ │
 │  │                                                     │ │
-│  │   TDengine 3.3.x 服务 (taosd)                       │ │
-│  │   监听端口: 6030-6049                               │ │
+│  │   TDengine 3.3.x Service (taosd)                    │ │
+│  │   Listening ports: 6030-6049                        │ │
 │  │                                                     │ │
-│  │   挂载:                                              │
-│  │     - /app → 项目目录                                │
-│  │     - Conda 环境路径                                 │
-│  │     - 数据目录                                       │
+│  │   Mounts:                                           │ │
+│  │     - /app → project directory                      │ │
+│  │     - Conda environment path                        │ │
+│  │     - Data directory                                │ │
 │  └─────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 系统要求
+### System Requirements
 
-| 组件 | 版本 | 说明 |
-|------|------|------|
-| 操作系统 | Ubuntu 20.04+ | 仅支持 Linux |
-| Conda | Miniconda/Anaconda | 环境管理 |
-| Apptainer | 1.1+ | 通过 conda 安装 |
-| TDengine | 3.3.x | 容器内运行 |
-| GCC | 7+ | C++ 编译 |
+| Component | Version | Description |
+|-----------|---------|-------------|
+| OS | Ubuntu 20.04+ | Linux only |
+| Conda | Miniconda/Anaconda | Environment management |
+| Apptainer | 1.1+ | Installed via conda |
+| TDengine | 3.3.x | Runs inside container |
+| GCC | 7+ | C++ compilation |
 
 ---
 
-## 安装步骤
+## Installation
 
-### 1. 克隆项目
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/yourname/TDlight.git
 cd TDlight
 ```
 
-### 2. 创建 Conda 环境
+### 2. Create Conda Environment
 
 ```bash
-# 创建主环境
+# Create main environment
 conda create -n tdlight python=3.8 -y
 conda activate tdlight
 
-# 安装 Apptainer
+# Install Apptainer
 conda install -c conda-forge apptainer -y
 
-# 安装 Python 依赖
-pip install numpy pandas scikit-learn lightgbm taospy feets taospy numpy pandas lightgbm
-
+# Install Python dependencies
+pip install numpy pandas scikit-learn lightgbm taospy feets
 ```
 
-### 3. 配置 TDengine 容器
+### 3. Configure TDengine Container
 
-`tdengine-fs/` 容器目录需自行构建：
+The `tdengine-fs/` container directory needs to be built manually:
 
-1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
-2. 下载 **TDengine 3.3.2.0** 或更高版本的 Docker 镜像
-3. 使用 Apptainer 构建 sandbox：
+1. Visit [TDengine Official Website](https://docs.taosdata.com/releases/tdengine/)
+2. Download **TDengine 3.3.2.0** or higher Docker image
+3. Build Apptainer sandbox:
 
 ```bash
 apptainer build --sandbox tdengine-fs docker://tdengine/tdengine:3.3.2.0
 ```
 
-或直接拉取：
+Or pull directly:
 
 ```bash
 apptainer pull tdengine.sif docker://tdengine/tdengine:3.3.2.0
 apptainer build --sandbox tdengine-fs tdengine.sif
 ```
 
-### 4. 获取 TDengine 客户端库
+### 4. Obtain TDengine Client Libraries
 
-`libs/` 目录下的 TDengine 库文件需从官网获取：
+TDengine library files in `libs/` directory need to be obtained from the official website:
 
-1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
-2. 下载 **TDengine 3.3.7.5** 版本（Linux amd64）
-3. 解压后将 `driver/libtaos.so*` 复制到 `libs/` 目录
+1. Visit [TDengine Official Website](https://docs.taosdata.com/releases/tdengine/)
+2. Download **TDengine 3.3.7.5** version (Linux amd64)
+3. Extract and copy `driver/libtaos.so*` to `libs/` directory
 
 ```bash
-# 示例
+# Example
 wget https://www.taosdata.com/assets-download/3.0/TDengine-client-3.3.7.5-Linux-x64.tar.gz
 tar -xzf TDengine-client-3.3.7.5-Linux-x64.tar.gz
 cp TDengine-client-3.3.7.5/driver/libtaos.so* TDlight/libs/
 ```
 
-### 5. 编辑配置文件
+### 5. Edit Configuration File
 
 ```bash
 cp config.json.example config.json
-# 修改 python 路径指向你的 feets 环境
+# Modify python path to point to your feets environment
 vim config.json
 ```
 
-主要配置项：
+Main configuration options:
 
 ```json
 {
@@ -228,7 +229,7 @@ vim config.json
 }
 ```
 
-### 6. 编译 C++ 组件
+### 6. Compile C++ Components
 
 ```bash
 cd web
@@ -238,49 +239,49 @@ cd ../insert
 ./build.sh
 ```
 
-### 7. 启动服务
+### 7. Start Services
 
 ```bash
-# 终端 1: 启动 TDengine 容器
+# Terminal 1: Start TDengine container
 conda activate tdlight
 ./start_env.sh
-# 容器内执行: taosd &
+# Inside container: taosd &
 
-# 终端 2: 启动 Web 服务
+# Terminal 2: Start Web service
 conda activate tdlight
 cd web
 export LD_LIBRARY_PATH=../libs:$LD_LIBRARY_PATH
 ./web_api
 ```
 
-### 8. 访问
+### 8. Access
 
-打开浏览器访问：**http://localhost:5001**
+Open browser and visit: **http://localhost:5001**
 
 ---
 
-## 数据导入
+## Data Import
 
-### 导入方式
+### Import Method
 
-通过 Web 界面 → "数据导入" 标签页操作。
+Via Web interface → "Data Import" tab.
 
-### 必需文件
+### Required Files
 
-导入光变曲线数据时，**必须同时提供坐标文件**：
+When importing light curve data, **coordinate file must be provided**:
 
-| 文件 | 说明 |
-|------|------|
-| 光变曲线目录 | 包含每个天体的 CSV 文件 |
-| 坐标文件 | 包含所有天体的 RA/DEC 坐标 |
+| File | Description |
+|------|-------------|
+| Light curve directory | Contains CSV file for each object |
+| Coordinate file | Contains RA/DEC coordinates for all objects |
 
-坐标文件用于：
-- 计算 HEALPix 索引（加速空间检索）
-- 为每个天体创建子表时设置 TAGS
+Coordinate file is used for:
+- Computing HEALPix indices (accelerates spatial search)
+- Setting TAGS when creating sub-tables for each object
 
-### 数据格式
+### Data Format
 
-**光变曲线 CSV**（每个天体一个文件，文件名包含 source_id）：
+**Light Curve CSV** (one file per object, filename contains source_id):
 
 ```csv
 source_id,band,time,mag,mag_error,flux,flux_error
@@ -289,7 +290,7 @@ source_id,band,time,mag,mag_error,flux,flux_error
 ...
 ```
 
-**坐标文件 CSV**（一个文件，包含所有天体）：
+**Coordinate File CSV** (one file containing all objects):
 
 ```csv
 source_id,ra,dec
@@ -298,226 +299,226 @@ source_id,ra,dec
 ...
 ```
 
-### 数据库行为
+### Database Behavior
 
-| 场景 | 行为 |
-|------|------|
-| 数据库不存在 | 自动创建，128 VGroups |
-| 数据库已存在 | 继续使用 |
-| 表已存在 | 跳过创建 |
-| 插入新数据 | **追加**到表中 |
-| 时间戳冲突 | **覆盖**旧记录 |
+| Scenario | Behavior |
+|----------|----------|
+| Database doesn't exist | Auto-create with 128 VGroups |
+| Database exists | Continue using |
+| Table exists | Skip creation |
+| Insert new data | **Append** to table |
+| Timestamp conflict | **Overwrite** old record |
 
->  **VGroups 限制**：默认配置 `supportVnodes=256`，每个数据库使用 128 VGroups。
-> 这意味着系统同时最多支持约 **2 个完整数据库**。
-> 导入前请通过"数据库管理"删除不需要的数据库释放资源。
-
----
-
-## 检索功能
-
-### 锥形检索 (Cone Search)
-
-以指定天球坐标为圆心，按半径搜索：
-
-- 输入：RA (度), DEC (度), 半径 (角分)
-- 使用 HEALPix 索引加速
-
-### 矩形检索 (Region Search)
-
-按 RA/DEC 范围批量查询：
-
-- 输入：RA 范围, DEC 范围
-- 适合批量获取区域内天体
+>  **VGroups Limit**: Default config `supportVnodes=256`, each database uses 128 VGroups.
+> This means the system supports approximately **2 complete databases** simultaneously.
+> Delete unnecessary databases via "Database Management" before importing to free resources.
 
 ---
 
-## 分类功能
+## Search Functions
 
-### 手动分类流程
+### Cone Search
 
-1. 选择要分类的天体
-2. 点击"开始分类"
-3. 系统自动：
-   - 从数据库提取光变曲线
-   - 使用 feets 提取 15个 天文特征
-   - LightGBM 模型预测变星类型
-   - 高于阈值的结果写回数据库
+Search by celestial coordinates as center with radius:
 
-### 自动分类功能
+- Input: RA (degrees), DEC (degrees), Radius (arcmin)
+- Uses HEALPix index for acceleration
 
-系统支持自动检测需要分类的光变曲线，与导入器完全解耦：
+### Region Search
 
-| 检测条件 | 说明 |
-|----------|------|
-| **首次出现** | 历史记录文件中没有该 source_id |
-| **数据增长 >20%** | 数据点数比历史记录增长超过 20% |
+Batch query by RA/DEC range:
 
-**工作流程**：
+- Input: RA range, DEC range
+- Suitable for bulk retrieval of objects in a region
+
+---
+
+## Classification Functions
+
+### Manual Classification Workflow
+
+1. Select objects to classify
+2. Click "Start Classification"
+3. System automatically:
+   - Extracts light curves from database
+   - Uses feets to extract 15 astronomical features
+   - LightGBM model predicts variable star type
+   - Results above threshold are written back to database
+
+### Automatic Classification
+
+System supports automatic detection of light curves requiring classification, fully decoupled from importers:
+
+| Detection Condition | Description |
+|---------------------|-------------|
+| **First Appearance** | source_id not in history file |
+| **Data Growth >20%** | Data points increased by more than 20% compared to history |
+
+**Workflow**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  1. 数据导入（任意导入器）                                        │
+│  1. Data Import (any importer)                                   │
 │     catalog_importer / lightcurve_importer                      │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  2. 点击"查询"按钮，触发 check_candidates 程序                    │
-│     - 查询数据库中所有天体的数据点数                               │
-│     - 与历史文件 lc_counts_<db>.csv 对比                         │
-│     - 新增或增长>20% 的天体写入 auto_classify_queue_<db>.csv      │
-│     - 新数据替换历史文件                                          │
+│  2. Click "Query" button, triggers check_candidates program      │
+│     - Query data point count for all objects in database        │
+│     - Compare with history file lc_counts_<db>.csv              │
+│     - Write new/grown >20% objects to auto_classify_queue.csv   │
+│     - Replace history file with new data                        │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  3. 点击"开始"，启动 auto_classify.py 后台任务                    │
-│     - 分批处理（默认 5000 条/批）                                  │
-│     - 使用 feets 提取特征 + LightGBM 预测                         │
-│     - 高置信度结果自动写回数据库                                   │
+│  3. Click "Start", launches auto_classify.py background task    │
+│     - Batch processing (default 5000 per batch)                 │
+│     - Feature extraction with feets + LightGBM prediction       │
+│     - High-confidence results auto-written to database          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**生成的文件**：
+**Generated Files**:
 
-| 文件 | 说明 |
-|------|------|
-| `data/lc_counts_<db>.csv` | 历史点数记录，用于下次比对 |
-| `data/auto_classify_queue_<db>.csv` | 待分类队列 |
+| File | Description |
+|------|-------------|
+| `data/lc_counts_<db>.csv` | Historical count records for next comparison |
+| `data/auto_classify_queue_<db>.csv` | Classification queue |
 
-**支持特性**：
+**Supported Features**:
 
-- 🔌 **解耦设计**：检测程序独立于导入器，可随时手动触发
-- ⏸️ **可中断**：随时停止，保存当前进度
-- 🔄 **断点续传**：点击"继续"从中断处恢复
-- 📊 **实时进度**：SSE 推送批次进度
-- 🔧 **可配置批次大小**：默认 5000，可调整
-- 🗄️ **多数据库支持**：每个数据库独立的队列和历史文件
+- 🔌 **Decoupled Design**: Detection program independent from importer, can be triggered manually anytime
+- ⏸️ **Interruptible**: Stop anytime, saves current progress
+- 🔄 **Resume Support**: Click "Continue" to resume from interruption point
+- 📊 **Real-time Progress**: SSE pushes batch progress
+- 🔧 **Configurable Batch Size**: Default 5000, adjustable
+- 🗄️ **Multi-database Support**: Independent queue and history files per database
 
-### 置信度阈值
+### Confidence Threshold
 
-在"系统设置"中可调整：
+Adjustable in "System Settings":
 
-- 高于阈值：自动写回数据库
-- 低于阈值：仅显示，不保存
+- Above threshold: Automatically written to database
+- Below threshold: Display only, not saved
 
 ---
 
-## 目录结构
+## Directory Structure
 
 ```
 TDlight/
-├── config.json          # 主配置文件
-├── start_env.sh         # 容器启动脚本
+├── config.json          # Main configuration file
+├── start_env.sh         # Container startup script
 │
-├── web/                 # Web 服务
-│   ├── web_api.cpp      # C++ HTTP 后端
-│   ├── index.html       # 前端页面
-│   ├── app.js           # 前端交互逻辑
-│   └── build.sh         # 编译脚本
+├── web/                 # Web service
+│   ├── web_api.cpp      # C++ HTTP backend
+│   ├── index.html       # Frontend page
+│   ├── app.js           # Frontend interaction logic
+│   └── build.sh         # Build script
 │
-├── class/               # 分类模块
-│   ├── classify_pipeline.py  # 手动分类流水线
-│   └── auto_classify.py      # 自动分类脚本
+├── class/               # Classification module
+│   ├── classify_pipeline.py  # Manual classification pipeline
+│   └── auto_classify.py      # Automatic classification script
 │
-├── insert/              # 数据导入与检测
-│   ├── catalog_importer.cpp      # 星表导入
-│   ├── lightcurve_importer.cpp   # 光变曲线导入
-│   ├── check_candidates.cpp      # 自动分类候选检测
+├── insert/              # Data import and detection
+│   ├── catalog_importer.cpp      # Catalog import
+│   ├── lightcurve_importer.cpp   # Light curve import
+│   ├── check_candidates.cpp      # Auto-classify candidate detection
 │   └── build.sh
 │
-├── classifier/          # 预训练模型
+├── classifier/          # Pre-trained models
 │   ├── lgbm_111w_model.pkl
 │   └── metadata.pkl
 │
-├── libs/                # C++ 运行时库
-├── include/             # C++ 头文件
-├── config/              # TDengine 客户端配置
-├── data/                # 数据文件目录
-│   ├── lc_counts_<db>.csv           # 历史点数记录
-│   └── auto_classify_queue_<db>.csv # 待分类队列
-└── tdengine-fs/         # Apptainer 容器
+├── libs/                # C++ runtime libraries
+├── include/             # C++ header files
+├── config/              # TDengine client configuration
+├── data/                # Data file directory
+│   ├── lc_counts_<db>.csv           # Historical count records
+│   └── auto_classify_queue_<db>.csv # Classification queue
+└── tdengine-fs/         # Apptainer container
 ```
 
 ---
 
-## API 参考
+## API Reference
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/cone_search` | GET | 锥形检索 |
-| `/api/region_search` | GET | 矩形检索 |
-| `/api/lightcurve/{table}` | GET | 获取光变曲线 |
-| `/api/classify_objects` | POST | 启动分类任务 |
-| `/api/classify_stream` | GET (SSE) | 分类进度流 |
-| `/api/import/start` | POST | 启动数据导入 |
-| `/api/import/stream` | GET (SSE) | 导入进度流 |
-| `/api/import/stop` | POST | 停止导入 |
-| `/api/auto_classify/check` | POST | 触发候选检测（对比历史，生成队列）|
-| `/api/auto_classify/candidates` | GET | 获取待分类天体数量 |
-| `/api/auto_classify/start` | POST | 启动自动分类任务 |
-| `/api/auto_classify/stop` | POST | 停止自动分类 |
-| `/api/auto_classify/stream` | GET (SSE) | 自动分类进度流 |
-| `/api/auto_classify/results` | GET | 获取自动分类结果 |
-| `/api/config` | GET/POST | 获取/修改配置 |
-| `/api/config/reload` | GET | 重载配置到后端 |
-| `/api/databases` | GET | 列出数据库 |
-| `/api/database/drop` | POST | 删除数据库 |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/cone_search` | GET | Cone search |
+| `/api/region_search` | GET | Region search |
+| `/api/lightcurve/{table}` | GET | Get light curve |
+| `/api/classify_objects` | POST | Start classification task |
+| `/api/classify_stream` | GET (SSE) | Classification progress stream |
+| `/api/import/start` | POST | Start data import |
+| `/api/import/stream` | GET (SSE) | Import progress stream |
+| `/api/import/stop` | POST | Stop import |
+| `/api/auto_classify/check` | POST | Trigger candidate detection (compare history, generate queue) |
+| `/api/auto_classify/candidates` | GET | Get number of objects to classify |
+| `/api/auto_classify/start` | POST | Start auto-classification task |
+| `/api/auto_classify/stop` | POST | Stop auto-classification |
+| `/api/auto_classify/stream` | GET (SSE) | Auto-classification progress stream |
+| `/api/auto_classify/results` | GET | Get auto-classification results |
+| `/api/config` | GET/POST | Get/modify configuration |
+| `/api/config/reload` | GET | Reload configuration to backend |
+| `/api/databases` | GET | List databases |
+| `/api/database/drop` | POST | Delete database |
 
 ---
 
-## 常见问题
+## Troubleshooting
 
-### 编译报错：找不到头文件
+### Compilation Error: Header Files Not Found
 
-确保在对应目录执行编译：
+Ensure you compile in the correct directory:
 
 ```bash
 cd web && ./build.sh
 cd insert && ./build.sh
 ```
 
-### 运行时找不到 .so 文件
+### Runtime Error: .so Files Not Found
 
-设置库路径：
+Set library path:
 
 ```bash
 export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 ```
 
-### 无法连接 TDengine
+### Cannot Connect to TDengine
 
-1. 确认容器内 taosd 已启动
-2. 检查 `config.json` 中的数据库配置
-3. 检查端口 6041 是否可访问
+1. Confirm taosd is running inside container
+2. Check database configuration in `config.json`
+3. Check if port 6041 is accessible
 
-### VNodes exhausted 错误
+### VNodes Exhausted Error
 
-数据库 VGroups 资源耗尽。解决方案：
+Database VGroups resources exhausted. Solutions:
 
-1. 通过 Web 界面删除不需要的数据库
-2. 或增加 `config/taos_cfg/taos.cfg` 中的 `supportVnodes` 值
+1. Delete unnecessary databases via Web interface
+2. Or increase `supportVnodes` value in `config/taos_cfg/taos.cfg`
 
-### 分类无结果
+### No Classification Results
 
-1. 确认 `config.json` 中 `python` 路径正确
-2. 确认 feets 环境中依赖完整
-3. 查看 `class/` 目录下的日志
+1. Confirm `python` path in `config.json` is correct
+2. Confirm feets environment has complete dependencies
+3. Check logs in `class/` directory
 
 ---
 
-## 大文件获取
+## Large File Acquisition
 
-以下文件因体积过大未包含在仓库中，如有需要请联系作者获取：
+The following files are not included in the repository due to their large size. Contact the author if needed:
 
-| 文件 | 大小 | 获取方式 |
-|------|------|----------|
-| `classifier/lgbm_111w_model.pkl` | ~250MB | 联系作者获取预训练模型 |
-| `data/` | - | 用户自备天文数据 |
-| `tdengine-fs/` | ~2GB | 使用 `apptainer build` 构建容器 |
+| File | Size | How to Obtain |
+|------|------|---------------|
+| `classifier/lgbm_111w_model.pkl` | ~250MB | Contact author for pre-trained model |
+| `data/` | - | Users provide their own astronomical data |
+| `tdengine-fs/` | ~2GB | Build container using `apptainer build` |
 
-**联系方式**：如需测试数据/预训练模型/部署等相关问题，请联系 3023244355@tju.edu.cn。
+**Contact**: For pre-trained models or deployment issues, please contact 3023244355@tju.edu.cn.
 
 ---
 
@@ -527,11 +528,11 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ---
 
-## 致谢
+## Acknowledgments
 
-- [TDengine](https://www.taosdata.com/) - 高性能时序数据库
-- [HEALPix](https://healpix.jpl.nasa.gov/) - 天球像素化方案
-- [feets](https://feets.readthedocs.io/) - 天文特征提取
-- [LightGBM](https://lightgbm.readthedocs.io/) - 梯度提升框架
-- [Three.js](https://threejs.org/) - WebGL 3D 渲染
-- [Chart.js](https://www.chartjs.org/) - 图表可视化
+- [TDengine](https://www.taosdata.com/) - High-performance time-series database
+- [HEALPix](https://healpix.jpl.nasa.gov/) - Hierarchical Equal Area isoLatitude Pixelization
+- [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
+- [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
+- [Three.js](https://threejs.org/) - WebGL 3D Rendering
+- [Chart.js](https://www.chartjs.org/) - Chart Visualization
