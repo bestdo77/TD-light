@@ -74,6 +74,44 @@ window.saveConfig = async function() {
     }
 };
 
+// 从 config.json 同步配置到后端和前端
+window.syncConfigFromFile = async function() {
+    try {
+        // 1. 让后端重新读取 config.json
+        const reloadResp = await fetch('/api/config/reload');
+        const reloadResult = await reloadResp.json();
+        
+        if (!reloadResult.success) {
+            showToast('重载配置失败: ' + (reloadResult.error || '未知错误'), 'error');
+            return;
+        }
+        
+        // 2. 获取新配置并更新前端
+        const configResp = await fetch('/api/config');
+        const config = await configResp.json();
+        
+        // 更新数据导入页面的数据库名
+        const importDbInput = document.getElementById('importDbName');
+        if (importDbInput && config.database?.name) {
+            importDbInput.value = config.database.name;
+        }
+        
+        // 更新 nside
+        const nsideInput = document.getElementById('importNside');
+        if (nsideInput && config.healpix?.nside) {
+            nsideInput.value = config.healpix.nside;
+        }
+        
+        showToast('配置已同步: ' + (config.database?.name || ''), 'success');
+        
+        // 刷新待分类数量
+        window.onDbNameChange();
+        
+    } catch (e) {
+        showToast('同步配置失败: ' + e.message, 'error');
+    }
+};
+
 window.reloadConfigBackend = async function() {
     try {
         // 获取前端当前的配置值
@@ -1142,6 +1180,14 @@ async function startImportTask(type, path, coordsPath, dbName, nside) {
                     } else {
                         showToast('导入完成!', 'success');
                         updateImportStep(2);
+                        
+                        // 刷新待分类天体数量并提示
+                        setTimeout(async () => {
+                            const count = await window.refreshPendingCount();
+                            if (count > 0) {
+                                showToast(`检测到 ${count} 个天体待分类，可在下方启动自动分类`, 'success');
+                            }
+                        }, 500);
                     }
                 }
             } catch (e) {
@@ -1271,6 +1317,274 @@ window.dropSelectedDatabase = async function() {
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+// ==================== 自动分类功能 ====================
+
+let autoClassifyEventSource = null;
+
+window.refreshPendingCount = async function(runCheck = true) {
+    const countEl = document.getElementById('pendingClassifyCount');
+    const hint = document.getElementById('pendingClassifyHint');
+    const refreshBtn = document.getElementById('refreshPendingBtn');
+    
+    // 优先使用界面输入的数据库名，否则从配置获取
+    let dbName = document.getElementById('importDbName')?.value?.trim() || '';
+    
+    try {
+        // 显示检测中状态
+        if (runCheck) {
+            if (countEl) countEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (hint) hint.textContent = '正在查询数据库...';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 查询中';
+            }
+            
+            // 触发检测（如果没填数据库名，让后端用默认配置）
+            const checkResp = await fetch('/api/auto_classify/check', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ db_name: dbName })
+            });
+            const checkData = await checkResp.json();
+            
+            if (!checkData.success) {
+                showToast('检测失败: ' + (checkData.error || '未知错误'), 'error');
+            } else {
+                // 使用返回的数据库名（可能是默认配置）
+                dbName = checkData.db_name || dbName;
+            }
+        }
+        
+        // 获取数量
+        const resp = await fetch(`/api/auto_classify/candidates?db_name=${encodeURIComponent(dbName)}`);
+        const data = await resp.json();
+        const count = data.count || 0;
+        dbName = data.db_name || dbName;
+        
+        if (countEl) countEl.textContent = count.toLocaleString();
+        
+        const batchSize = parseInt(document.getElementById('autoClassifyBatchSize')?.value) || 5000;
+        if (hint) {
+            if (count > 0) {
+                const batches = Math.ceil(count / batchSize);
+                hint.innerHTML = `<strong>${dbName}</strong>: ${count.toLocaleString()} 条，分 ${batches} 批`;
+            } else {
+                hint.innerHTML = `<strong>${dbName}</strong>: 队列为空`;
+            }
+        }
+        
+        const startBtn = document.getElementById('startAutoClassifyBtn');
+        if (startBtn) {
+            startBtn.disabled = count === 0;
+        }
+        
+        return count;
+    } catch (e) {
+        console.error('Failed to refresh pending count:', e);
+        if (countEl) countEl.textContent = '?';
+        if (hint) hint.textContent = '检测失败，请重试';
+        return 0;
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 查询';
+        }
+    }
+};
+
+// 兼容旧名称
+window.refreshCandidateCount = window.refreshPendingCount;
+
+// 数据库名切换时，刷新待分类数量（不运行检测，只读取已有队列）
+window.onDbNameChange = async function() {
+    const countEl = document.getElementById('pendingClassifyCount');
+    const hint = document.getElementById('pendingClassifyHint');
+    const dbName = document.getElementById('importDbName')?.value?.trim() || '';
+    
+    if (!dbName) {
+        if (countEl) countEl.textContent = '-';
+        if (hint) hint.textContent = '请填写数据库名';
+        return;
+    }
+    
+    try {
+        if (countEl) countEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // 只读取已有队列，不触发新检测
+        const resp = await fetch(`/api/auto_classify/candidates?db_name=${encodeURIComponent(dbName)}`);
+        const data = await resp.json();
+        const count = data.count || 0;
+        
+        if (countEl) countEl.textContent = count.toLocaleString();
+        
+        const batchSize = parseInt(document.getElementById('autoClassifyBatchSize')?.value) || 5000;
+        if (hint) {
+            if (count > 0) {
+                const batches = Math.ceil(count / batchSize);
+                hint.innerHTML = `<strong>${dbName}</strong>: ${count.toLocaleString()} 条，分 ${batches} 批`;
+            } else {
+                hint.innerHTML = `<strong>${dbName}</strong>: 队列为空，点击查询检测`;
+            }
+        }
+        
+        const startBtn = document.getElementById('startAutoClassifyBtn');
+        if (startBtn) startBtn.disabled = count === 0;
+        
+    } catch (e) {
+        console.error('Failed to get candidate count:', e);
+        if (countEl) countEl.textContent = '?';
+    }
+};
+
+window.startAutoClassify = async function(resume = false) {
+    const batchSize = parseInt(document.getElementById('autoClassifyBatchSize').value) || 5000;
+    
+    try {
+        document.getElementById('autoClassifyProgressCard').style.display = 'block';
+        document.getElementById('autoClassifyProgressText').textContent = '启动中...';
+        document.getElementById('autoClassifyProgressPercent').textContent = '0%';
+        document.getElementById('autoClassifyProgressBar').style.width = '0%';
+        
+        // 先建立 SSE 连接
+        if (autoClassifyEventSource) {
+            autoClassifyEventSource.close();
+        }
+        
+        autoClassifyEventSource = new EventSource('/api/auto_classify/stream');
+        
+        autoClassifyEventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.status === 'idle') return;
+                
+                document.getElementById('autoClassifyProgressText').textContent = data.message || '处理中...';
+                document.getElementById('autoClassifyProgressPercent').textContent = data.percent + '%';
+                document.getElementById('autoClassifyProgressBar').style.width = data.percent + '%';
+                
+                // 显示批次统计
+                if (data.current_batch) {
+                    document.getElementById('autoClassifyStats').innerHTML = `
+                        <div>当前批次: ${data.current_batch}/${data.total_batches}</div>
+                        <div>批次进度: ${data.batch_progress || 0}% (${data.processed || 0}/${data.batch_total || 0})</div>
+                        <div>已更新: ${data.updated || 0} 个</div>
+                    `;
+                }
+                
+                // 完成或暂停
+                if (data.status === 'completed' || data.status === 'paused' || data.status === 'error') {
+                    autoClassifyEventSource.close();
+                    autoClassifyEventSource = null;
+                    
+                    if (data.status === 'completed') {
+                        showToast('自动分类完成！', 'success');
+                        window.refreshCandidateCount();
+                    } else if (data.status === 'paused') {
+                        showToast('自动分类已暂停，可点击"继续上次"恢复', 'success');
+                    } else {
+                        showToast('自动分类出错: ' + data.message, 'error');
+                    }
+                }
+            } catch (e) {
+                console.error('Auto classify SSE error:', e);
+            }
+        };
+        
+        autoClassifyEventSource.onerror = () => {
+            if (autoClassifyEventSource) {
+                autoClassifyEventSource.close();
+                autoClassifyEventSource = null;
+            }
+        };
+        
+        // 发送启动请求
+        const dbName = document.getElementById('importDbName')?.value?.trim() || '';
+        const resp = await fetch('/api/auto_classify/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resume, batch_size: batchSize, db_name: dbName })
+        });
+        const result = await resp.json();
+        
+        if (result.success) {
+            showToast(`自动分类已启动，共 ${result.count} 个天体`, 'success');
+        } else {
+            showToast('启动失败: ' + result.error, 'error');
+            if (autoClassifyEventSource) {
+                autoClassifyEventSource.close();
+                autoClassifyEventSource = null;
+            }
+        }
+    } catch (e) {
+        showToast('启动自动分类失败: ' + e.message, 'error');
+    }
+};
+
+window.stopAutoClassify = async function() {
+    const stopBtn = document.getElementById('stopAutoClassifyBtn');
+    
+    try {
+        // 按钮反馈
+        if (stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 停止中';
+        }
+        
+        if (autoClassifyEventSource) {
+            autoClassifyEventSource.close();
+            autoClassifyEventSource = null;
+        }
+        
+        const resp = await fetch('/api/auto_classify/stop', { method: 'POST' });
+        const result = await resp.json();
+        
+        if (result.success) {
+            showToast('自动分类已停止', 'success');
+            const progressText = document.getElementById('autoClassifyProgressText');
+            if (progressText) progressText.textContent = '已停止';
+            
+            // 隐藏进度卡片
+            setTimeout(() => {
+                const card = document.getElementById('autoClassifyProgressCard');
+                if (card) card.style.display = 'none';
+            }, 1000);
+        } else {
+            showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        showToast('停止失败: ' + e.message, 'error');
+    } finally {
+        // 恢复按钮
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.innerHTML = '<i class="fas fa-stop"></i> 停止';
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('TD-light Portal Loaded');
+    
+    // 从配置加载默认数据库名
+    try {
+        const resp = await fetch('/api/config');
+        const config = await resp.json();
+        const dbName = config.database?.name || 'gaiadr2_lc';
+        
+        // 同步到导入页面的数据库名输入框
+        const importDbInput = document.getElementById('importDbName');
+        if (importDbInput && !importDbInput.value) {
+            importDbInput.value = dbName;
+        }
+    } catch (e) {
+        console.log('Failed to load config for db name');
+    }
+    
+    // 切换到导入页面时刷新候选数量
+    const importTab = document.getElementById('nav-import');
+    if (importTab) {
+        importTab.addEventListener('click', () => {
+            setTimeout(() => window.onDbNameChange(), 100);
+        });
+    }
 });

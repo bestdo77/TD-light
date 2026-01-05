@@ -35,6 +35,13 @@ g++ -std=c++17 -O3 lightcurve_importer.cpp -o lightcurve_importer \
     -ltaos -lhealpix_cxx -lsharp -lcfitsio -lpthread \
     -Wl,-rpath,"$LIBS_DIR"
 
+echo "编译 check_candidates..."
+g++ -std=c++17 -O3 check_candidates.cpp -o check_candidates \
+    -I"$INCLUDE_DIR" \
+    -L"$LIBS_DIR" \
+    -ltaos -lpthread \
+    -Wl,-rpath,"$LIBS_DIR"
+
 echo "编译完成"
-chmod +x catalog_importer lightcurve_importer
+chmod +x catalog_importer lightcurve_importer check_candidates
 

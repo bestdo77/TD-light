@@ -126,15 +126,17 @@
         }
         
         .card-header {
-            font-size: 1.15rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: var(--text);
-            margin-bottom: 24px;
-            padding-bottom: 16px;
+            margin-bottom: 20px;
+            padding-bottom: 14px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: nowrap;
+            gap: 12px;
         }
         
         .card-header-title {
@@ -194,18 +196,18 @@
         
         /* 按钮 */
         .btn {
-            width: 100%;
-            padding: 14px 24px;
+            padding: 12px 20px;
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            white-space: nowrap;
         }
         
         .btn-primary {
@@ -236,6 +238,12 @@
             cursor: not-allowed;
         }
         
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            gap: 5px;
+        }
+        
         .btn-row {
             display: flex;
             gap: 12px;
@@ -243,6 +251,18 @@
         
         .btn-row .btn {
             flex: 1;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        
+        .btn-outline:hover {
+            background: var(--bg);
+            border-color: var(--accent);
+            color: var(--accent);
         }
         
         /* 天体列表 */
@@ -919,6 +939,9 @@
                             <div class="card-icon"><i class="fas fa-cog"></i></div>
                             <span>公共配置</span>
                         </div>
+                        <button class="btn btn-outline btn-sm" onclick="window.syncConfigFromFile();" title="从 config.json 重新加载配置">
+                            <i class="fas fa-sync-alt"></i> 同步配置
+                        </button>
                     </div>
                     <div class="form-group">
                         <label class="form-label">坐标文件路径 (source_coordinates.csv)</label>
@@ -927,7 +950,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">数据库名</label>
-                            <input type="text" class="form-input" id="importDbName" value="gaiadr2_lc">
+                            <input type="text" class="form-input" id="importDbName" value="gaiadr2_lc" onchange="window.onDbNameChange();">
                         </div>
                         <div class="form-group">
                             <label class="form-label">HEALPix NSIDE</label>
@@ -1016,7 +1039,7 @@
                             <div class="card-icon"><i class="fas fa-tasks"></i></div>
                             <span>导入进度</span>
                         </div>
-                        <button class="btn btn-danger" onclick="window.stopImport();" style="padding: 6px 12px;">
+                        <button class="btn btn-danger btn-sm" onclick="window.stopImport();">
                             <i class="fas fa-stop"></i> 停止
                         </button>
                     </div>
@@ -1051,6 +1074,63 @@
                     </div>
                 </div>
 
+                <!-- 自动分类 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-robot"></i></div>
+                            <span>自动分类</span>
+                        </div>
+                        <button class="btn btn-outline btn-sm" id="refreshPendingBtn" onclick="window.refreshPendingCount();">
+                            <i class="fas fa-sync-alt"></i> 查询
+                        </button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px; background: var(--bg); padding: 8px 14px; border-radius: 6px;">
+                            <span style="font-size: 1.2rem; font-weight: 700; color: var(--accent);" id="pendingClassifyCount">-</span>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">待分类</span>
+                        </div>
+                        <div style="flex: 1; min-width: 150px; font-size: 0.8rem; color: var(--text-secondary);" id="pendingClassifyHint">
+                            检测新增或增长&gt;20%的光变曲线
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="btn btn-success btn-sm" id="startAutoClassifyBtn" onclick="window.startAutoClassify(false);" disabled>
+                                <i class="fas fa-play"></i> 开始
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="window.startAutoClassify(true);">
+                                <i class="fas fa-redo"></i> 继续
+                            </button>
+                            <button class="btn btn-danger btn-sm" id="stopAutoClassifyBtn" onclick="window.stopAutoClassify();">
+                                <i class="fas fa-stop"></i> 停止
+                            </button>
+                            <input type="number" class="form-input" id="autoClassifyBatchSize" value="5000" min="100" max="50000" 
+                                   style="padding: 5px 8px; width: 70px; font-size: 0.8rem;" title="每批处理数量">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自动分类进度 -->
+                <div class="card" id="autoClassifyProgressCard" style="display: none;">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                            <span>自动分类进度</span>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span id="autoClassifyProgressText">准备中...</span>
+                            <span id="autoClassifyProgressPercent">0%</span>
+                        </div>
+                        <div style="background: var(--bg); border-radius: 4px; height: 10px; overflow: hidden;">
+                            <div id="autoClassifyProgressBar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div id="autoClassifyStats" style="font-family: 'Source Code Pro', monospace; font-size: 0.85rem; color: var(--text-secondary);">
+                        <!-- 批次统计信息 -->
+                    </div>
+                </div>
+
                 <!-- 使用说明 -->
                 <div class="card">
                     <div class="card-header">
@@ -1062,6 +1142,7 @@
                     <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.8;">
                         <p><strong>星表导入</strong>：每个 CSV 文件包含一个 HEALPix 区域的星表，文件名格式为 <code>healpix_*.csv</code></p>
                         <p style="margin-top: 8px;"><strong>光变曲线导入</strong>：每个 CSV 文件包含一个天体的光变曲线，文件名格式为 <code>source_id.csv</code></p>
+                        <p style="margin-top: 8px;"><strong>自动分类</strong>：导入时自动检测新出现或数据点增长超过20%的光变曲线，加入分类队列，每批5000条处理。</p>
                         <p style="margin-top: 8px;"><strong>注意</strong>：导入是资源密集型操作，建议在服务器负载较低时进行。</p>
                     </div>
                 </div>
