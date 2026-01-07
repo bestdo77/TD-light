@@ -424,7 +424,6 @@ function updateMetadata(meta, count) {
     document.getElementById('metaRa').textContent = meta.ra?.toFixed(4) + '°' || '-';
     document.getElementById('metaDec').textContent = meta.dec?.toFixed(4) + '°' || '-';
     document.getElementById('metaClass').textContent = meta.object_class || 'UNKNOWN';
-    document.getElementById('metaBand').textContent = meta.band || 'Unknown';
     document.getElementById('metaCount').textContent = count || '-';
     document.getElementById('objectInfo').textContent = `Source ID: ${meta.source_id}`;
 }
@@ -923,31 +922,72 @@ function plotLightcurve(data) {
     
     if (lightcurveChart) lightcurveChart.destroy();
     
-    const timestamps = data.data.map(d => new Date(d.ts));
-    const magnitudes = data.data.map(d => d.mag);
-    const dataPoints = magnitudes.map((mag, idx) => ({ x: timestamps[idx].getTime(), y: mag }));
+    // 波段颜色配置
+    const bandColors = {
+        'G': { border: '#22c55e', bg: '#22c55e' },      // 绿色
+        'BP': { border: '#3b82f6', bg: '#3b82f6' },     // 蓝色
+        'RP': { border: '#ef4444', bg: '#ef4444' },     // 红色
+        'g': { border: '#22c55e', bg: '#22c55e' },
+        'r': { border: '#ef4444', bg: '#ef4444' },
+        'i': { border: '#a855f7', bg: '#a855f7' },      // 紫色
+        'z': { border: '#f97316', bg: '#f97316' },      // 橙色
+        'u': { border: '#06b6d4', bg: '#06b6d4' },      // 青色
+        'default': { border: '#6b7280', bg: '#6b7280' } // 灰色
+    };
+    
+    // 按波段分组数据
+    const bandGroups = {};
+    data.data.forEach(d => {
+        const band = d.band || 'Unknown';
+        if (!bandGroups[band]) {
+            bandGroups[band] = [];
+        }
+        bandGroups[band].push({
+            x: new Date(d.ts).getTime(),
+            y: d.mag,
+            mag_err: d.mag_err,
+            flux: d.flux,
+            flux_err: d.flux_err
+        });
+    });
+    
+    // 为每个波段创建 dataset
+    const datasets = Object.keys(bandGroups).map(band => {
+        const colors = bandColors[band] || bandColors['default'];
+        return {
+            label: band,
+            data: bandGroups[band],
+            borderColor: colors.border,
+            backgroundColor: colors.bg,
+            pointRadius: 3,
+            pointHoverRadius: 6
+        };
+    });
     
     const ctx = canvas.getContext('2d');
     lightcurveChart = new Chart(ctx, {
         type: 'scatter',
-        data: {
-            datasets: [{
-                label: '星等',
-                data: dataPoints,
-                borderColor: '#4f46e5',
-                backgroundColor: '#4f46e5',
-                pointRadius: 3,
-                pointHoverRadius: 6
-            }]
-        },
+        data: { datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: { 
+                    display: datasets.length > 1,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15
+                    }
+                },
                 tooltip: {
                     callbacks: {
-                        label: ctx => `星等: ${ctx.raw.y.toFixed(4)}`
+                        label: ctx => {
+                            const point = ctx.raw;
+                            let label = `${ctx.dataset.label}: ${point.y.toFixed(4)} mag`;
+                            if (point.mag_err) label += ` ±${point.mag_err.toFixed(4)}`;
+                            return label;
+                        }
                     }
                 }
             },
@@ -957,7 +997,10 @@ function plotLightcurve(data) {
                     time: { unit: 'month', displayFormats: { month: 'yyyy-MM' } },
                     title: { display: true, text: '时间' }
                 },
-                y: { title: { display: true, text: '星等' } }
+                y: { 
+                    title: { display: true, text: '星等' },
+                    reverse: false  // 星等值越小越亮，如需反转设为 true
+                }
             }
         }
     });

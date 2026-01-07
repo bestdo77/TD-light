@@ -277,6 +277,7 @@ struct LightcurvePoint {
     double mag_error;
     double flux;
     double flux_error;
+    string band;
 };
 
 TAOS* conn = nullptr;
@@ -542,7 +543,7 @@ vector<ObjectInfo> get_objects(int limit = 200) {
 vector<LightcurvePoint> get_lightcurve(const string& table_name, const string& time_start = "", const string& time_end = "") {
     vector<LightcurvePoint> points;
     
-    string query = "SELECT ts, mag, mag_error, flux, flux_error FROM " + table_name;
+    string query = "SELECT ts, mag, mag_error, flux, flux_error, band FROM " + table_name;
     
     vector<string> conditions;
     if (!time_start.empty()) {
@@ -568,7 +569,9 @@ vector<LightcurvePoint> get_lightcurve(const string& table_name, const string& t
     }
     
     TAOS_ROW row;
+    int* lengths;
     while ((row = taos_fetch_row(res)) != nullptr) {
+        lengths = taos_fetch_lengths(res);
         LightcurvePoint point;
         
         TAOS_FIELD* fields = taos_fetch_fields(res);
@@ -584,6 +587,13 @@ vector<LightcurvePoint> get_lightcurve(const string& table_name, const string& t
         point.mag_error = *(double*)row[2];
         point.flux = *(double*)row[3];
         point.flux_error = *(double*)row[4];
+        
+        // 获取 band 字段
+        if (row[5] != nullptr && lengths[5] > 0) {
+            point.band = string((char*)row[5], lengths[5]);
+        } else {
+            point.band = "G";  // 默认波段
+        }
         
         points.push_back(point);
     }
@@ -770,7 +780,8 @@ string lightcurve_to_json(const vector<LightcurvePoint>& points) {
              << "\"mag\":" << points[i].mag << ","
              << "\"mag_err\":" << points[i].mag_error << ","
              << "\"flux\":" << points[i].flux << ","
-             << "\"flux_err\":" << points[i].flux_error
+             << "\"flux_err\":" << points[i].flux_error << ","
+             << "\"band\":\"" << json_escape(points[i].band) << "\""
              << "}";
     }
     
@@ -2137,6 +2148,7 @@ int main() {
     
     int opt = 1;
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(server_socket, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
     setsockopt(server_socket, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
     
     struct sockaddr_in server_addr;
@@ -2145,7 +2157,7 @@ int main() {
     server_addr.sin_port = htons(config.web_port);
     
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        cerr << "[ERROR] Failed to bind port " << config.web_port << endl;
+        cerr << "[ERROR] Failed to bind port " << config.web_port << ": " << strerror(errno) << endl;
         return 1;
     }
     

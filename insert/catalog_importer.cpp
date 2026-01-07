@@ -284,6 +284,7 @@ int main(int argc, char* argv[]) {
     string db_name = "gaiadr2_lc";
     string super_table = "sensor_data";
     int nside = 64;
+    bool drop_db = false;
     
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -291,13 +292,15 @@ int main(int argc, char* argv[]) {
         else if (arg == "--coords" && i + 1 < argc) coords_file = argv[++i];
         else if (arg == "--db" && i + 1 < argc) db_name = argv[++i];
         else if (arg == "--nside" && i + 1 < argc) nside = stoi(argv[++i]);
+        else if (arg == "--drop_db") drop_db = true;
     }
     
     if (catalog_dir.empty() || coords_file.empty()) {
         cout << "Usage: " << argv[0] << " --catalogs <dir> --coords <file> [options]" << endl;
         cout << "\nOptions:" << endl;
-        cout << "  --db <name>         Database name (default: catalog_database)" << endl;
+        cout << "  --db <name>         Database name (default: gaiadr2_lc)" << endl;
         cout << "  --nside <N>         HEALPix NSIDE (default: 64)" << endl;
+        cout << "  --drop_db           Drop existing database" << endl;
         return 1;
     }
     
@@ -310,6 +313,7 @@ int main(int argc, char* argv[]) {
     cout << " vgroups: " << NUM_VGROUPS << endl;
     cout << " Batch size: " << BATCH_SIZE << " rows/batch" << endl;
     cout << " HEALPix NSIDE: " << nside << endl;
+    cout << " Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err" << endl;
     cout << " Strategy: STMT API + Direct Assignment + Two-Phase" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
@@ -337,6 +341,13 @@ int main(int argc, char* argv[]) {
         cerr << "[ERROR] Connection failed (host: " << taos_host << ")" << endl;
         taos_cleanup();
         return 1;
+    }
+    
+    // Drop database if requested
+    if (drop_db) {
+        string drop_sql = "DROP DATABASE IF EXISTS " + db_name;
+        taos_query(conn, drop_sql.c_str());
+        cout << "[INFO] Dropped existing database: " << db_name << endl;
     }
     
     // Create database (specify vgroups)
@@ -409,6 +420,7 @@ int main(int argc, char* argv[]) {
     cout << "  [OK] Read " << coords_map.size() << " source coordinates (" << fixed << setprecision(2) << coord_time << "s)" << endl;
     
     // ==================== Read Catalog Files ====================
+    // Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err
     cout << "\n[INFO] Reading catalog files..." << endl;
     auto catalog_start = high_resolution_clock::now();
     
@@ -434,22 +446,27 @@ int main(int argc, char* argv[]) {
         
         while (getline(file, line)) {
             auto parts = split(line, ',');
-            if (parts.size() < 7) continue;
+            if (parts.size() < 10) continue;
             
+            // Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err
             long long source_id = stoll(parts[0]);
+            
+            // Use coordinates from coords file
             if (coords_map.find(source_id) == coords_map.end()) continue;
             
             if (source_data.find(source_id) == source_data.end()) {
                 SubTable* st = new SubTable();
                 st->source_id = source_id;
                 st->table_name = "t_" + to_string(source_id);
-                st->cls = "unknown";
                 st->ra = coords_map[source_id].first;
                 st->dec = coords_map[source_id].second;
+                st->cls = parts[3];  // class from catalog
                 
                 // Calculate HEALPix ID
                 double theta = (90.0 - st->dec) * M_PI / 180.0;
                 double phi = st->ra * M_PI / 180.0;
+                if (theta < 0) theta = 0;
+                if (theta > M_PI) theta = M_PI;
                 pointing pt(theta, phi);
                 st->healpix_id = hp.ang2pix(pt);
                 
@@ -457,18 +474,15 @@ int main(int argc, char* argv[]) {
             }
             
             Record rec;
-            rec.band = parts[2];
-            double time_days = stod(parts[3]);
-            // Gaia DR2 reference epoch is J2015.5 (TCB) ~ JD 2457206.375 ?? 
-            // Actually Gaia time is relative to J2010.0 TCB (JD 2455197.5)
-            // Unix Epoch is JD 2440587.5
-            // So we need: (time_days + 2455197.5 - 2440587.5) * 86400000
+            rec.band = parts[4];  // band
+            double time_days = stod(parts[5]);  // time
+            // Gaia time is relative to J2010.0 TCB (JD 2455197.5)
             rec.ts_ms = static_cast<int64_t>((time_days + 2455197.5 - 2451545.0) * 86400000);
-            rec.mag = stod(parts[4]);
-            rec.flux = stod(parts[5]);
-            rec.flux_error = stod(parts[6]);
-            rec.mag_error = calculateMagError(rec.flux, rec.flux_error);
-            rec.jd_tcb = rec.ts_ms / 86400000.0 + 2451545.0;
+            rec.flux = stod(parts[6]);  // flux
+            rec.flux_error = stod(parts[7]);  // flux_err
+            rec.mag = stod(parts[8]);  // mag
+            rec.mag_error = stod(parts[9]);  // mag_err
+            rec.jd_tcb = 2455197.5 + time_days;
             
             source_data[source_id]->records.push_back(rec);
             stats.total_records++;

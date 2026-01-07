@@ -157,6 +157,7 @@ void direct_worker_thread(int thread_id,
     // Process all tables assigned to this thread directly
     for (const auto& st : my_tables) {
         // 1. Read file
+        // New format: time,band,flux,flux_err,mag,mag_err
         vector<Record> records;
         ifstream file(st.file_path);
         if (!file.is_open()) continue;
@@ -166,16 +167,17 @@ void direct_worker_thread(int thread_id,
         while (getline(file, line)) {
             if (line.empty()) continue;
             auto tokens = split(line, ',');
-            if (tokens.size() >= 7) {
+            if (tokens.size() >= 6) {
                 try {
                     Record rec;
-                    rec.ts_ms = parseTimestamp(tokens[3]);
-                    strncpy(rec.band, tokens[2].c_str(), 15); rec.band[15] = 0;
+                    double time_val = stod(tokens[0]);
+                    rec.ts_ms = parseTimestamp(tokens[0]);
+                    strncpy(rec.band, tokens[1].c_str(), 15); rec.band[15] = 0;
+                    rec.flux = stod(tokens[2]);
+                    rec.flux_error = stod(tokens[3]);
                     rec.mag = stod(tokens[4]);
-                    rec.flux = stod(tokens[5]);
-                    rec.flux_error = stod(tokens[6]);
-                    rec.mag_error = calculateMagError(rec.flux, rec.flux_error);
-                    rec.jd_tcb = 2455197.5 + stod(tokens[3]);
+                    rec.mag_error = stod(tokens[5]);
+                    rec.jd_tcb = 2455197.5 + time_val;
                     records.push_back(rec);
                 } catch (...) { continue; }
             }
