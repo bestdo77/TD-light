@@ -449,9 +449,60 @@ else
 fi
 
 #=============================================================================
-# Step 8: Verification
+# Step 8: Start TDengine & Initialize Database
 #=============================================================================
-print_header "Step 8: Installation Verification"
+print_header "Step 8: Starting TDengine & Initializing Database"
+
+# Start TDengine service
+print_step "Starting TDengine service..."
+
+# Check if systemd user service exists
+if [ -f "$HOME/.config/systemd/user/taosd.service" ]; then
+    systemctl --user daemon-reload 2>/dev/null
+    systemctl --user start taosd 2>/dev/null
+    sleep 3
+    
+    if systemctl --user is-active taosd &>/dev/null; then
+        print_success "TDengine service started"
+    else
+        print_warning "TDengine service failed to start via systemd"
+        print_info "Trying manual start..."
+        nohup "$TDENGINE_HOME/bin/taosd" -c "$TAOS_CONFIG_DIR" > "$RUNTIME_DIR/taos_home/log/taosd_manual.log" 2>&1 &
+        sleep 3
+    fi
+else
+    # No systemd service, start manually
+    print_info "Starting TDengine manually..."
+    nohup "$TDENGINE_HOME/bin/taosd" -c "$TAOS_CONFIG_DIR" > "$RUNTIME_DIR/taos_home/log/taosd_manual.log" 2>&1 &
+    sleep 3
+fi
+
+# Check if TDengine is running
+if pgrep -x taosd > /dev/null; then
+    print_success "TDengine is running"
+    
+    # Create database
+    print_step "Creating database 'gaiadr2_lc'..."
+    
+    # Use taos CLI to create database
+    if "$TDENGINE_HOME/bin/taos" -c "$TAOS_CONFIG_DIR" -s "CREATE DATABASE IF NOT EXISTS gaiadr2_lc VGROUPS 128 BUFFER 256 KEEP 365d;" 2>/dev/null; then
+        print_success "Database 'gaiadr2_lc' ready"
+    else
+        print_warning "Could not create database automatically"
+        print_info "You can create it manually: taos -c \$TAOS_CONFIG_DIR"
+        print_info "  > CREATE DATABASE IF NOT EXISTS gaiadr2_lc;"
+    fi
+else
+    print_warning "TDengine is not running"
+    print_info "Start it manually after installation:"
+    print_info "  systemctl --user start taosd"
+    print_info "  OR: taosd -c \$TAOS_CONFIG_DIR &"
+fi
+
+#=============================================================================
+# Step 9: Verification
+#=============================================================================
+print_header "Step 9: Installation Verification"
 
 VERIFY_OK=true
 
@@ -529,18 +580,13 @@ echo "  1. Activate environment:"
 echo "     ${CYAN}conda activate tdlight${NC}"
 echo "     ${CYAN}source start_env.sh${NC}"
 echo ""
-echo "  2. Start TDengine service:"
+echo "  2. Start TDengine (if not already running):"
 echo "     ${CYAN}systemctl --user start taosd${NC}"
-echo "     Or manually: ${CYAN}taosd -c \$TAOS_CONFIG_DIR &${NC}"
 echo ""
-echo "  3. Initialize database (first time only):"
-echo "     ${CYAN}taos -c \$TAOS_CONFIG_DIR${NC}"
-echo "     ${CYAN}> CREATE DATABASE IF NOT EXISTS gaiadr2_lc;${NC}"
-echo ""
-echo "  4. Start web interface:"
+echo "  3. Start web interface:"
 echo "     ${CYAN}cd web && ./web_api${NC}"
 echo ""
-echo "  5. Open browser:"
+echo "  4. Open browser:"
 echo "     ${CYAN}http://localhost:5001${NC}"
 echo ""
 echo "─────────────────────────────────────────────────────────────────"
