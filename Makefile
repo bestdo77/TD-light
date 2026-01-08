@@ -11,7 +11,7 @@ RPATH = -Wl,-rpath,'$$ORIGIN/../libs'
 TDENGINE_HOME ?= $(HOME)/taos
 
 # Targets
-TARGETS = web/web_api insert/catalog_importer insert/lightcurve_importer query/optimized_query
+TARGETS = web/web_api insert/catalog_importer insert/lightcurve_importer insert/check_candidates query/optimized_query
 
 .PHONY: all clean check-env
 
@@ -33,6 +33,10 @@ insert/catalog_importer: insert/catalog_importer.cpp
 	@echo "Built: $@"
 
 insert/lightcurve_importer: insert/lightcurve_importer.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ $< $(LIBS) $(RPATH)
+	@echo "Built: $@"
+
+insert/check_candidates: insert/check_candidates.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ $< $(LIBS) $(RPATH)
 	@echo "Built: $@"
 
