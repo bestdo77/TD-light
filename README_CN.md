@@ -464,6 +464,27 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 2. 确认 feets 环境中依赖完整
 3. 查看 `class/` 目录下的日志
 
+### 终端崩溃 / 命令无法执行
+
+如果执行 `source start_env.sh` 后终端崩溃或命令失效：
+
+```bash
+# 检查 libs/ 目录是否包含不兼容的系统库
+ls libs/ | grep -E "libstdc|libgcc|libgomp"
+
+# 如果存在，删除它们（应使用系统版本）
+rm -f libs/libstdc++.so* libs/libgcc_s.so* libs/libgomp.so*
+```
+
+### 端口 5001 被占用
+
+```bash
+# 查看占用进程
+lsof -i :5001
+
+# 或更换端口（编辑 web/web_api.cpp 中的 PORT 常量）
+```
+
 ---
 
 ## 大文件获取

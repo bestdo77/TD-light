@@ -323,11 +323,26 @@ else
     fi
 fi
 
-# Create symlink for libtaos.so if missing
-if [ -f "$TDENGINE_HOME/driver/libtaos.so.$TDENGINE_VERSION" ] && [ ! -f "$TDENGINE_HOME/driver/libtaos.so" ]; then
-    print_info "Creating libtaos.so symlink..."
-    ln -sf "libtaos.so.$TDENGINE_VERSION" "$TDENGINE_HOME/driver/libtaos.so"
+# Create symlinks for TDengine libraries if missing
+print_info "Checking TDengine library symlinks..."
+cd "$TDENGINE_HOME/driver"
+
+if [ -f "libtaos.so.$TDENGINE_VERSION" ] && [ ! -e "libtaos.so" ]; then
+    ln -sf "libtaos.so.$TDENGINE_VERSION" "libtaos.so"
+    print_success "Created libtaos.so symlink"
 fi
+
+if [ -f "libtaosnative.so.$TDENGINE_VERSION" ] && [ ! -e "libtaosnative.so" ]; then
+    ln -sf "libtaosnative.so.$TDENGINE_VERSION" "libtaosnative.so"
+    print_success "Created libtaosnative.so symlink"
+fi
+
+if [ -f "libtaosws.so.$TDENGINE_VERSION" ] && [ ! -e "libtaosws.so" ]; then
+    ln -sf "libtaosws.so.$TDENGINE_VERSION" "libtaosws.so"
+    print_success "Created libtaosws.so symlink"
+fi
+
+cd "$PROJECT_ROOT"
 
 # Set up environment
 export LD_LIBRARY_PATH="$TDENGINE_HOME/driver:$PROJECT_ROOT/libs:$LD_LIBRARY_PATH"

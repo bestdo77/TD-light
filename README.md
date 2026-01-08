@@ -464,6 +464,27 @@ Database VGroups resources exhausted. Solutions:
 2. Confirm feets environment has complete dependencies
 3. Check logs in `class/` directory
 
+### Terminal Crash / Commands Not Working
+
+If terminal crashes or commands fail after running `source start_env.sh`:
+
+```bash
+# Check if libs/ contains incompatible system libraries
+ls libs/ | grep -E "libstdc|libgcc|libgomp"
+
+# If found, delete them (should use system versions)
+rm -f libs/libstdc++.so* libs/libgcc_s.so* libs/libgomp.so*
+```
+
+### Port 5001 Already in Use
+
+```bash
+# Find the process using the port
+lsof -i :5001
+
+# Or change port (edit PORT constant in web/web_api.cpp)
+```
+
 ---
 
 ## Large File Acquisition

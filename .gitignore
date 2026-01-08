@@ -55,3 +55,4 @@ Thumbs.db
 *.bak
 *~
 
+query/optimized_query
