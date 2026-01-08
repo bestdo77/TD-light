@@ -344,6 +344,13 @@ fi
 
 cd "$PROJECT_ROOT"
 
+# Link libtaos.so to project libs folder (so Python can find it)
+print_info "Linking libtaos.so to project libs..."
+if [ -f "$TDENGINE_HOME/driver/libtaos.so" ]; then
+    ln -sf "$TDENGINE_HOME/driver/libtaos.so" "$PROJECT_ROOT/libs/libtaos.so"
+    print_success "Linked: libs/libtaos.so -> $TDENGINE_HOME/driver/libtaos.so"
+fi
+
 # Set up environment
 export LD_LIBRARY_PATH="$TDENGINE_HOME/driver:$PROJECT_ROOT/libs:$LD_LIBRARY_PATH"
 export PATH="$TDENGINE_HOME/bin:$PATH"
