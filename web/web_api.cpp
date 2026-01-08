@@ -243,7 +243,13 @@ string get_auto_classify_candidate_file(const string& db_name) {
 
 // Run candidate detection program
 int run_check_candidates(const string& db_name) {
-    string cmd = "../insert/check_candidates --db " + db_name + " > /tmp/check_candidates.log 2>&1";
+    // Ensure TDengine config and libs are visible when invoked from web/ directory
+    string cmd = "bash -c '"
+                 "export LD_LIBRARY_PATH=" + config.libs_path + ":$LD_LIBRARY_PATH; "
+                 "export TAOS_CFG_DIR=" + config.taos_cfg_path + "; "
+                 "export TAOS_LOG_DIR=/tmp/taos_log; mkdir -p /tmp/taos_log; "
+                 "../insert/check_candidates --db " + db_name +
+                 "' > /tmp/check_candidates.log 2>&1";
     return system(cmd.c_str());
 }
 
