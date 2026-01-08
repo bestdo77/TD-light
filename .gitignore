@@ -17,6 +17,7 @@ pyenv/
 # 配置文件 (包含敏感信息)
 config.json
 config/config.json
+config/taos_cfg/taos.cfg
 
 # 数据和模型 (太大，自动下载)
 data/

@@ -434,11 +434,12 @@ print_header "Step 7: Configuring TDengine & Project"
 TAOS_CFG_DIR="$PROJECT_ROOT/config/taos_cfg"
 TAOS_CFG_FILE="$TAOS_CFG_DIR/taos.cfg"
 
-mkdir -p "$TAOS_CFG_DIR"
+mkdir -p "$TAOS_CFG_DIR" "$RUNTIME_DIR/taos_home/log" "$RUNTIME_DIR/taos_home/data" "$RUNTIME_DIR/taos_home/temp"
 
-if [ ! -f "$TAOS_CFG_FILE" ]; then
-    print_step "Creating TDengine configuration..."
-    cat > "$TAOS_CFG_FILE" << EOF
+# Always ensure taos.cfg points to this clone's runtime paths (fixes hardcoded-path issues)
+print_step "Configuring TDengine (taos.cfg)..."
+
+cat > "$TAOS_CFG_FILE" << EOF
 # TDlight TDengine Configuration
 fqdn               localhost
 serverPort         6030
@@ -454,10 +455,7 @@ maxShellConns      500
 # Allows ~2 databases simultaneously
 supportVnodes      256
 EOF
-    print_success "Created: $TAOS_CFG_FILE"
-else
-    print_info "TDengine config already exists: $TAOS_CFG_FILE"
-fi
+print_success "Wrote: $TAOS_CFG_FILE"
 
 # Copy project config if not exists
 if [ ! -f "$PROJECT_ROOT/config.json" ]; then
