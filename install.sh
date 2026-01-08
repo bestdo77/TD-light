@@ -380,10 +380,6 @@ if [[ "$SKIP_CONDA" != "true" ]]; then
         print_warning "requirements.txt not found"
     fi
     
-    # Install healpy via conda (for Python-side HEALPix if needed)
-    print_step "Installing healpy (optional, for Python HEALPix support)..."
-    conda install -c conda-forge healpy -y 2>/dev/null || print_warning "healpy installation skipped"
-    
 else
     print_header "Step 5: Skipping Conda Setup (--skip-conda)"
 fi
