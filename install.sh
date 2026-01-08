@@ -467,13 +467,24 @@ if [ ! -f "$PROJECT_ROOT/config.json" ]; then
         cp "$PROJECT_ROOT/config/config.example.json" "$PROJECT_ROOT/config.json"
         
         # Inject absolute python path into config.json
-        PYTHON_EXEC=$(which python3)
-        if [ -n "$PYTHON_EXEC" ]; then
-            # Use sed to replace "python": "python3" with absolute path
+        # Prefer conda environment python, fallback to system python
+        if [[ "$SKIP_CONDA" != "true" ]] && [ -n "$CONDA_PREFIX" ]; then
+            PYTHON_EXEC="$CONDA_PREFIX/bin/python3"
+        elif conda info --envs 2>/dev/null | grep -q "^$CONDA_ENV_NAME "; then
+            # Conda env exists but not activated, get its path
+            CONDA_ENV_PATH=$(conda info --envs | grep "^$CONDA_ENV_NAME " | awk '{print $NF}')
+            PYTHON_EXEC="$CONDA_ENV_PATH/bin/python3"
+        else
+            PYTHON_EXEC=$(which python3 2>/dev/null || echo "python3")
+        fi
+        
+        if [ -n "$PYTHON_EXEC" ] && [ -f "$PYTHON_EXEC" ]; then
             # Escape slashes in path for sed
             ESCAPED_PYTHON_EXEC=$(echo "$PYTHON_EXEC" | sed 's/\//\\\//g')
             sed -i "s/\"python\": \"python3\"/\"python\": \"$ESCAPED_PYTHON_EXEC\"/g" "$PROJECT_ROOT/config.json"
-            print_info "Configured Python path: $PYTHON_EXEC"
+            print_success "Configured Python path: $PYTHON_EXEC"
+        else
+            print_warning "Could not determine Python path, using default 'python3'"
         fi
         
         print_success "Created: config.json (from template)"

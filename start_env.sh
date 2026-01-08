@@ -9,6 +9,7 @@ PROJECT_ROOT="$SCRIPT_DIR"
 # TDengine paths
 TDENGINE_HOME="${TDENGINE_HOME:-$HOME/taos}"
 TAOS_CONFIG_DIR="$PROJECT_ROOT/config/taos_cfg"
+CONDA_ENV_NAME="tdlight"
 
 # Colors
 GREEN='\033[0;32m'
@@ -26,6 +27,17 @@ echo ""
 if [ ! -d "$TDENGINE_HOME" ]; then
     echo -e "${YELLOW}[!] TDengine not found. Run ./install.sh first${NC}"
     exit 1
+fi
+
+# Activate conda environment for Python scripts
+if command -v conda &> /dev/null; then
+    eval "$(conda shell.bash hook)" 2>/dev/null
+    if conda env list | grep -q "^$CONDA_ENV_NAME "; then
+        conda activate "$CONDA_ENV_NAME" 2>/dev/null
+        echo -e "${GREEN}[✓] Conda environment: $CONDA_ENV_NAME${NC}"
+    else
+        echo -e "${YELLOW}[!] Conda env '$CONDA_ENV_NAME' not found, using system Python${NC}"
+    fi
 fi
 
 # Set environment
