@@ -563,13 +563,3 @@ int main(int argc, char* argv[]) {
     taos_cleanup();
     return 0;
 }
-
-
-    cout << "[STATS] Rows inserted: " << stats.inserted_records << endl;
-    cout << "[STATS] Avg throughput: " << (int64_t)(stats.inserted_records / total_time) << " rows/s" << endl;
-    cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
-    
-    taos_cleanup();
-    return 0;
-}
-

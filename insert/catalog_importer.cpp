@@ -633,7 +633,3 @@ int main(int argc, char* argv[]) {
     cout << "\n[OK] Catalog import complete!" << endl;
     return 0;
 }
-
-    cout << "\n[OK] Catalog import complete!" << endl;
-    return 0;
-}
