@@ -446,6 +446,13 @@ logDir             $RUNTIME_DIR/taos_home/log
 dataDir            $RUNTIME_DIR/taos_home/data
 tempDir            $RUNTIME_DIR/taos_home/temp
 firstEp            localhost:6030
+
+# Increase max connections for multi-threaded import
+maxShellConns      500
+
+# Increase VNode quota to support 128 VGroups per database
+# Allows ~2 databases simultaneously
+supportVnodes      256
 EOF
     print_success "Created: $TAOS_CFG_FILE"
 else

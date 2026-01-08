@@ -267,7 +267,7 @@ source_id,ra,dec
 | Insert new data | **Append** to table |
 | Timestamp conflict | **Overwrite** old record |
 
->  **VGroups Limit**: Default config `supportVnodes=256`, each database uses 128 VGroups.
+>  **VGroups Limit**: Config file sets `supportVnodes=256`, each database uses 128 VGroups, allowing ~2 databases simultaneously.
 > This means the system supports approximately **2 complete databases** simultaneously.
 > Delete unnecessary databases via "Database Management" before importing to free resources.
 
