@@ -515,9 +515,38 @@ else
 fi
 
 #=============================================================================
-# Step 9: Verification
+# Step 9: Extract Test Data
 #=============================================================================
-print_header "Step 9: Installation Verification"
+print_header "Step 9: Extracting Test Data"
+
+TESTDATA_DIR="$PROJECT_ROOT/testdata"
+TESTDATA_ARCHIVE="$TESTDATA_DIR/gaia_testdata.tar.gz"
+
+if [ -f "$TESTDATA_ARCHIVE" ]; then
+    # Check if already extracted
+    if [ -d "$TESTDATA_DIR/catalogs" ] && [ -d "$TESTDATA_DIR/lightcurves" ]; then
+        print_success "Test data already extracted"
+    else
+        print_step "Extracting gaia_testdata.tar.gz..."
+        cd "$TESTDATA_DIR"
+        tar -xzf gaia_testdata.tar.gz
+        if [ $? -eq 0 ]; then
+            print_success "Test data extracted successfully"
+            print_info "  Catalogs: $(ls -1 $TESTDATA_DIR/catalogs/*.csv 2>/dev/null | wc -l) files"
+            print_info "  Lightcurves: $(ls -1 $TESTDATA_DIR/lightcurves/*.csv 2>/dev/null | wc -l) files"
+        else
+            print_warning "Failed to extract test data"
+        fi
+        cd "$PROJECT_ROOT"
+    fi
+else
+    print_info "No test data archive found (optional)"
+fi
+
+#=============================================================================
+# Step 10: Verification
+#=============================================================================
+print_header "Step 10: Installation Verification"
 
 VERIFY_OK=true
 
@@ -604,7 +633,13 @@ echo ""
 echo "  4. Open browser:"
 echo "     ${CYAN}http://localhost:5001${NC}"
 echo ""
+echo "  5. Import test data (optional):"
+echo "     Use web interface → Data Import → Select testdata/catalogs/"
+echo ""
 echo "─────────────────────────────────────────────────────────────────"
+echo ""
+echo "Test data location: ${CYAN}testdata/catalogs/${NC} (708 catalog files)"
+echo "                    ${CYAN}testdata/lightcurves/${NC} (3800 lightcurve files)"
 echo ""
 echo "For more information, see: ${CYAN}README.md${NC}"
 echo ""
