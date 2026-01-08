@@ -11,15 +11,15 @@
         "host": "0.0.0.0"
     },
     "classification": {
-        "model_path": "../models/lgbm_model.pkl",
+        "model_path": "../models/lgbm_111w_model.pkl",
         "metadata_path": "../models/metadata.pkl",
-        "confidence_threshold": 0.95,
+        "confidence_threshold": 0.8,
         "update_database": true
     },
     "paths": {
         "libs": "../libs",
         "taos_cfg": "../config/taos_cfg",
-        "python": "python3",
+        "python": "python",
         "temp_dir": "/tmp"
     },
     "healpix": {
@@ -27,4 +27,3 @@
         "scheme": "NEST"
     }
 }
-

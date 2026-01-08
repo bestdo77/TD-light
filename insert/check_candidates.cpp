@@ -27,7 +27,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-constexpr int TAOS_PORT = 6041;
+constexpr int TAOS_PORT = 6030;
 
 // Data structures
 struct SourceInfo {

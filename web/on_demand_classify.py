@@ -107,7 +107,7 @@ def run_classification():
     update_progress(5, "Connecting to database...")
     
     try:
-        conn = taos.connect(host=taos_host, user='root', password='taosdata', database=db_name, port=6041)
+        conn = taos.connect(host=taos_host, user='root', password='taosdata', database=db_name, port=6030)
         cursor = conn.cursor()
     except Exception as e:
         return {"error": f"Database connection failed: {str(e)}"}

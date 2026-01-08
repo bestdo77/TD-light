@@ -18,10 +18,13 @@ pyenv/
 config.json
 config/config.json
 
-# 数据和模型 (太大，需联系作者获取)
+# 数据和模型 (太大，自动下载)
 data/
 models/*.pkl
-classifier/*.pkl
+
+# 第三方依赖 (自动下载)
+third_party/
+*.tar.gz
 
 # TDengine 库文件 (从官方获取)
 libs/libtaos*.so*
@@ -44,9 +47,9 @@ runtime/
 .DS_Store
 Thumbs.db
 
-# 容器
-tdengine-fs/
-apptainer/*.sif
+# 旧容器目录 (已废弃，使用原生 TDengine)
+# tdengine-fs/
+# apptainer/*.sif
 
 # 备份
 *.bak

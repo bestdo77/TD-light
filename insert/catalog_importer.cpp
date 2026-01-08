@@ -90,7 +90,7 @@ void create_tables_worker(int thread_id, const vector<SubTable*>& tables,
                           const string& db_name, const string& super_table,
                           PerfStats& stats) {
     string taos_host = get_taos_host();
-    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6041);
+    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6030);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
         cerr << "❌ Thread " << thread_id << " connection failed" << endl;
@@ -123,7 +123,7 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
                    size_t start, size_t end,
                    const string& db_name, PerfStats& stats) {
     string taos_host = get_taos_host();
-    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6041);
+    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6030);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
         cerr << "❌ Thread " << thread_id << " connection failed" << endl;
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
     
     // Connect to database
     string taos_host = get_taos_host();
-    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", NULL, 6041);
+    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", NULL, 6030);
     if (!conn) {
         cerr << "[ERROR] Connection failed (host: " << taos_host << ")" << endl;
         taos_cleanup();
@@ -457,7 +457,6 @@ int main(int argc, char* argv[]) {
             if (source_data.find(source_id) == source_data.end()) {
                 SubTable* st = new SubTable();
                 st->source_id = source_id;
-                st->table_name = "t_" + to_string(source_id);
                 st->ra = coords_map[source_id].first;
                 st->dec = coords_map[source_id].second;
                 st->cls = parts[3];  // class from catalog
@@ -469,6 +468,9 @@ int main(int argc, char* argv[]) {
                 if (theta > M_PI) theta = M_PI;
                 pointing pt(theta, phi);
                 st->healpix_id = hp.ang2pix(pt);
+                
+                // Set table name after healpix_id is calculated
+                st->table_name = "sensor_data_" + to_string(st->healpix_id) + "_" + to_string(source_id);
                 
                 source_data[source_id] = st;
             }

@@ -236,7 +236,7 @@ web/
 
 ### 2. Classification Failed
 
-- Confirm model files exist (classifier/*.pkl)
+- Confirm model files exist (models/*.pkl)
 - Confirm Python environment path is correct
 - Check paths.python in config.json
 

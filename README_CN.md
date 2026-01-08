@@ -12,11 +12,10 @@
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **数据库** | TDengine 3.x | 高性能时序数据库 |
+| **数据库** | TDengine 3.4+ | 高性能时序数据库（用户模式安装） |
 | **后端** | C++17 | HTTP 服务器、HEALPix 空间索引 |
 | **分类** | Python + LightGBM | feets 特征提取 + 机器学习 |
 | **前端** | HTML/JS | Three.js 3D、Chart.js 图表 |
-| **容器** | Apptainer | TDengine 运行环境 |
 
 ---
 
@@ -61,7 +60,7 @@
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   TDengine 时序数据库 (Apptainer 容器)            │
+│                   TDengine 时序数据库 (用户模式)                  │
 │                                                                 │
 │   超级表: lightcurves                                            │
 │   ├── 标签: healpix_id, source_id, ra, dec, cls                 │
@@ -101,40 +100,25 @@
 
 ### 环境概述
 
-本系统使用 **Conda 管理环境** + **Apptainer 容器运行 TDengine**：
-
-- Apptainer 通过 Conda 安装
-- TDengine 服务运行在 Apptainer 容器内
-- Web 服务和分类脚本运行在容器外（Conda 环境）
-- 容器通过挂载访问 Conda 环境和数据文件
+本系统使用 **Conda 管理 Python 环境** + **TDengine 用户模式安装**（无需 root 权限）：
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     宿主机 (Linux)                        │
-│                                                          │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │              Conda 环境 (tdlight / feets)           │ │
-│  │                                                     │ │
-│  │   Python 3.10 + numpy + lightgbm + feets + taospy   │ │
-│  │   apptainer (通过 conda-forge 安装)                  │ │
-│  │                                                     │ │
-│  │   运行: web_api, classify_pipeline.py, importers    │ │
-│  └─────────────────────────────────────────────────────┘ │
-│                          │                               │
-│                          │ 挂载                          │
-│                          ▼                               │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │           Apptainer 容器 (tdengine-fs)              │ │
-│  │                                                     │ │
-│  │   TDengine 3.3.x 服务 (taosd)                       │ │
-│  │   监听端口: 6030-6049                               │ │
-│  │                                                     │ │
-│  │   挂载:                                              │
-│  │     - /app → 项目目录                                │
-│  │     - Conda 环境路径                                 │
-│  │     - 数据目录                                       │
-│  └─────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     宿主机 (Linux)                           │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              Conda 环境 (tdlight / feets)               │ │
+│  │   Python 3.10 + numpy + lightgbm + feets + taospy       │ │
+│  │   运行: web_api, classify_pipeline.py, importers        │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                              │                               │
+│                              ▼                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │         TDengine 3.4+ (用户模式安装，~/taos)             │ │
+│  │   taosd 服务 (systemctl --user)                         │ │
+│  │   监听端口: 6030                                         │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### 系统要求
@@ -142,9 +126,8 @@
 | 组件 | 版本 | 说明 |
 |------|------|------|
 | 操作系统 | Ubuntu 20.04+ | 仅支持 Linux |
-| Conda | Miniconda/Anaconda | 环境管理 |
-| Apptainer | 1.1+ | 通过 conda 安装 |
-| TDengine | 3.3.x | 容器内运行 |
+| Conda | Miniconda/Anaconda | Python 环境管理 |
+| TDengine | 3.4.0+ | 用户模式安装，无需 sudo |
 | GCC | 7+ | C++ 编译 |
 
 ---
@@ -158,56 +141,32 @@ git clone https://github.com/yourname/TDlight.git
 cd TDlight
 ```
 
-### 2. 创建 Conda 环境
+### 2. 安装 TDengine（用户模式，无需 sudo）
 
 ```bash
-# 创建主环境
-conda create -n tdlight python=3.8 -y
+# 下载 TDengine 3.4.0.0
+wget https://downloads.tdengine.com/tdengine-tsdb-oss/3.4.0.0/tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
+
+# 解压并安装
+tar -xzf tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
+cd tdengine-tsdb-oss-3.4.0.0
+./install.sh -e no
+
+# 安装完成后，TDengine 位于 ~/taos
+```
+
+### 3. 创建 Conda 环境
+
+```bash
+# 创建 Python 环境
+conda create -n tdlight python=3.10 -y
 conda activate tdlight
 
-# 安装 Apptainer
-conda install -c conda-forge apptainer -y
-
 # 安装 Python 依赖
-pip install numpy pandas scikit-learn lightgbm taospy feets taospy numpy pandas lightgbm
-
+pip install numpy pandas scikit-learn lightgbm taospy feets
 ```
 
-### 3. 配置 TDengine 容器
-
-`tdengine-fs/` 容器目录需自行构建：
-
-1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
-2. 下载 **TDengine 3.3.2.0** 或更高版本的 Docker 镜像
-3. 使用 Apptainer 构建 sandbox：
-
-```bash
-apptainer build --sandbox tdengine-fs docker://tdengine/tdengine:3.3.2.0
-```
-
-或直接拉取：
-
-```bash
-apptainer pull tdengine.sif docker://tdengine/tdengine:3.3.2.0
-apptainer build --sandbox tdengine-fs tdengine.sif
-```
-
-### 4. 获取 TDengine 客户端库
-
-`libs/` 目录下的 TDengine 库文件需从官网获取：
-
-1. 访问 [TDengine 官网](https://docs.taosdata.com/releases/tdengine/)
-2. 下载 **TDengine 3.3.7.5** 版本（Linux amd64）
-3. 解压后将 `driver/libtaos.so*` 复制到 `libs/` 目录
-
-```bash
-# 示例
-wget https://www.taosdata.com/assets-download/3.0/TDengine-client-3.3.7.5-Linux-x64.tar.gz
-tar -xzf TDengine-client-3.3.7.5-Linux-x64.tar.gz
-cp TDengine-client-3.3.7.5/driver/libtaos.so* TDlight/libs/
-```
-
-### 5. 编辑配置文件
+### 4. 编辑配置文件
 
 ```bash
 cp config.json.example config.json
@@ -221,7 +180,7 @@ vim config.json
 {
     "database": {
         "host": "localhost",
-        "port": 6041,
+        "port": 6030,
         "name": "your_database_name"
     },
     "paths": {
@@ -230,7 +189,7 @@ vim config.json
 }
 ```
 
-### 6. 编译 C++ 组件
+### 5. 编译 C++ 组件
 
 ```bash
 cd web
@@ -240,22 +199,20 @@ cd ../insert
 ./build.sh
 ```
 
-### 7. 启动服务
+### 6. 启动服务
 
 ```bash
-# 终端 1: 启动 TDengine 容器
-conda activate tdlight
-./start_env.sh
-# 容器内执行: taosd &
+# 启动 TDengine 服务
+systemctl --user start taosd
 
-# 终端 2: 启动 Web 服务
+# 启动 Web 服务
 conda activate tdlight
+source start_env.sh  # 设置环境变量
 cd web
-export LD_LIBRARY_PATH=../libs:$LD_LIBRARY_PATH
 ./web_api
 ```
 
-### 8. 访问
+### 7. 访问
 
 打开浏览器访问：**http://localhost:5001**
 
@@ -429,7 +386,7 @@ TDlight/
 │   ├── check_candidates.cpp      # 自动分类候选检测
 │   └── build.sh
 │
-├── classifier/          # 预训练模型
+├── models/              # 预训练模型（自动下载）
 │   ├── lgbm_111w_model.pkl
 │   └── metadata.pkl
 │
@@ -515,7 +472,7 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 
 | 文件 | 大小 | 获取方式 |
 |------|------|----------|
-| `classifier/lgbm_111w_model.pkl` | ~250MB | 联系作者获取预训练模型 |
+| `models/lgbm_111w_model.pkl` | ~250MB | 安装时自动下载 |
 | `data/` | - | 用户自备天文数据 |
 | `tdengine-fs/` | ~2GB | 使用 `apptainer build` 构建容器 |
 

@@ -37,7 +37,7 @@ namespace fs = std::filesystem;
 // ==================== Configuration Parameters ====================
 constexpr int NUM_THREADS = 64;           // Number of threads
 constexpr int CREATE_TABLE_BATCH = 2000;  // Tables per batch (increased)
-constexpr int TAOS_PORT = 6041;
+constexpr int TAOS_PORT = 6030;
 
 // ==================== Data Structures ====================
 

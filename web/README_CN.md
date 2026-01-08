@@ -236,7 +236,7 @@ web/
 
 ### 2. 分类失败
 
-- 确认模型文件存在（classifier/*.pkl）
+- 确认模型文件存在（models/*.pkl）
 - 确认 Python 环境路径正确
 - 检查 config.json 中的 paths.python
 

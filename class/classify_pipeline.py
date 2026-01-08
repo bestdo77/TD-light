@@ -24,11 +24,11 @@ PROGRESS_FILE = "/tmp/class_progress.json"
 
 # Defaults
 DB_HOST = "localhost"
-DB_PORT = 6041
+DB_PORT = 6030
 DB_NAME = "gaiadr2_lc"
 SUPER_TABLE = "sensor_data"
-MODEL_PATH = "../classifier/lgbm_111w_model.pkl"
-METADATA_PATH = "../classifier/metadata.pkl"
+MODEL_PATH = "../models/lgbm_111w_model.pkl"
+METADATA_PATH = "../models/metadata.pkl"
 CONFIDENCE_THRESHOLD = 0.95
 UPDATE_DATABASE = True
 

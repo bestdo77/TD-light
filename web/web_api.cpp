@@ -31,7 +31,7 @@ const string CONFIG_FILE = "../config.json";
 
 struct Config {
     string db_host = "localhost";
-    int db_port = 6041;
+    int db_port = 6030;
     string db_user = "root";
     string db_password = "taosdata";
     string db_name = "gaiadr2_lc";
@@ -39,8 +39,8 @@ struct Config {
     int web_port = 5001;
     string web_host = "0.0.0.0";
     
-    string model_path = "../classifier/lgbm_111w_model.pkl";
-    string metadata_path = "../classifier/metadata.pkl";
+    string model_path = "../models/lgbm_111w_model.pkl";
+    string metadata_path = "../models/metadata.pkl";
     double confidence_threshold = 0.95;
     bool update_database = true;
     
@@ -126,7 +126,7 @@ bool load_config() {
     
     config.db_host = json_get_string(json, "host");
     if (config.db_host.empty()) config.db_host = "localhost";
-    config.db_port = json_get_int(json, "port", 6041);
+    config.db_port = json_get_int(json, "port", 6030);
     config.db_user = json_get_string(json, "user");
     if (config.db_user.empty()) config.db_user = "root";
     config.db_password = json_get_string(json, "password");

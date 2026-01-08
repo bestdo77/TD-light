@@ -12,11 +12,10 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 
 | Layer | Technology | Description |
 |-------|------------|-------------|
-| **Database** | TDengine 3.x | High-performance time-series database |
+| **Database** | TDengine 3.4+ | High-performance time-series database (user-mode) |
 | **Backend** | C++17 | HTTP server, HEALPix spatial indexing |
 | **Classification** | Python + LightGBM | feets feature extraction + machine learning |
 | **Frontend** | HTML/JS | Three.js 3D, Chart.js visualization |
-| **Container** | Apptainer | TDengine runtime environment |
 
 ---
 
@@ -61,7 +60,7 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              TDengine Time-series Database (Apptainer)           │
+│              TDengine Time-series Database (User Mode)            │
 │                                                                 │
 │   Super Table: lightcurves                                      │
 │   ├── Tags: healpix_id, source_id, ra, dec, cls                 │
@@ -101,40 +100,25 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 
 ### Environment Overview
 
-This system uses **Conda for environment management** + **Apptainer container for TDengine**:
-
-- Apptainer installed via Conda
-- TDengine service runs inside Apptainer container
-- Web service and classification scripts run outside container (Conda environment)
-- Container accesses Conda environment and data files via mounts
+This system uses **Conda for Python environment** + **TDengine user-mode installation** (no root required):
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     Host Machine (Linux)                  │
-│                                                          │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │           Conda Environment (tdlight / feets)       │ │
-│  │                                                     │ │
-│  │   Python 3.10 + numpy + lightgbm + feets + taospy   │ │
-│  │   apptainer (installed via conda-forge)             │ │
-│  │                                                     │ │
-│  │   Runs: web_api, classify_pipeline.py, importers    │ │
-│  └─────────────────────────────────────────────────────┘ │
-│                          │                               │
-│                          │ Mount                         │
-│                          ▼                               │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │           Apptainer Container (tdengine-fs)         │ │
-│  │                                                     │ │
-│  │   TDengine 3.3.x Service (taosd)                    │ │
-│  │   Listening ports: 6030-6049                        │ │
-│  │                                                     │ │
-│  │   Mounts:                                           │ │
-│  │     - /app → project directory                      │ │
-│  │     - Conda environment path                        │ │
-│  │     - Data directory                                │ │
-│  └─────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     Host Machine (Linux)                     │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │           Conda Environment (tdlight / feets)           │ │
+│  │   Python 3.10 + numpy + lightgbm + feets + taospy       │ │
+│  │   Runs: web_api, classify_pipeline.py, importers        │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                              │                               │
+│                              ▼                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │         TDengine 3.4+ (User-mode install, ~/taos)       │ │
+│  │   taosd service (systemctl --user)                      │ │
+│  │   Listening port: 6030                                  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### System Requirements
@@ -142,9 +126,8 @@ This system uses **Conda for environment management** + **Apptainer container fo
 | Component | Version | Description |
 |-----------|---------|-------------|
 | OS | Ubuntu 20.04+ | Linux only |
-| Conda | Miniconda/Anaconda | Environment management |
-| Apptainer | 1.1+ | Installed via conda |
-| TDengine | 3.3.x | Runs inside container |
+| Conda | Miniconda/Anaconda | Python environment management |
+| TDengine | 3.4.0+ | User-mode install, no sudo required |
 | GCC | 7+ | C++ compilation |
 
 ---
@@ -158,55 +141,32 @@ git clone https://github.com/yourname/TDlight.git
 cd TDlight
 ```
 
-### 2. Create Conda Environment
+### 2. Install TDengine (User Mode, No sudo Required)
 
 ```bash
-# Create main environment
-conda create -n tdlight python=3.8 -y
-conda activate tdlight
+# Download TDengine 3.4.0.0
+wget https://downloads.tdengine.com/tdengine-tsdb-oss/3.4.0.0/tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
 
-# Install Apptainer
-conda install -c conda-forge apptainer -y
+# Extract and install
+tar -xzf tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
+cd tdengine-tsdb-oss-3.4.0.0
+./install.sh -e no
+
+# After installation, TDengine is located at ~/taos
+```
+
+### 3. Create Conda Environment
+
+```bash
+# Create Python environment
+conda create -n tdlight python=3.10 -y
+conda activate tdlight
 
 # Install Python dependencies
 pip install numpy pandas scikit-learn lightgbm taospy feets
 ```
 
-### 3. Configure TDengine Container
-
-The `tdengine-fs/` container directory needs to be built manually:
-
-1. Visit [TDengine Official Website](https://docs.taosdata.com/releases/tdengine/)
-2. Download **TDengine 3.3.2.0** or higher Docker image
-3. Build Apptainer sandbox:
-
-```bash
-apptainer build --sandbox tdengine-fs docker://tdengine/tdengine:3.3.2.0
-```
-
-Or pull directly:
-
-```bash
-apptainer pull tdengine.sif docker://tdengine/tdengine:3.3.2.0
-apptainer build --sandbox tdengine-fs tdengine.sif
-```
-
-### 4. Obtain TDengine Client Libraries
-
-TDengine library files in `libs/` directory need to be obtained from the official website:
-
-1. Visit [TDengine Official Website](https://docs.taosdata.com/releases/tdengine/)
-2. Download **TDengine 3.3.7.5** version (Linux amd64)
-3. Extract and copy `driver/libtaos.so*` to `libs/` directory
-
-```bash
-# Example
-wget https://www.taosdata.com/assets-download/3.0/TDengine-client-3.3.7.5-Linux-x64.tar.gz
-tar -xzf TDengine-client-3.3.7.5-Linux-x64.tar.gz
-cp TDengine-client-3.3.7.5/driver/libtaos.so* TDlight/libs/
-```
-
-### 5. Edit Configuration File
+### 4. Edit Configuration File
 
 ```bash
 cp config.json.example config.json
@@ -220,7 +180,7 @@ Main configuration options:
 {
     "database": {
         "host": "localhost",
-        "port": 6041,
+        "port": 6030,
         "name": "your_database_name"
     },
     "paths": {
@@ -229,7 +189,7 @@ Main configuration options:
 }
 ```
 
-### 6. Compile C++ Components
+### 5. Compile C++ Components
 
 ```bash
 cd web
@@ -239,22 +199,20 @@ cd ../insert
 ./build.sh
 ```
 
-### 7. Start Services
+### 6. Start Services
 
 ```bash
-# Terminal 1: Start TDengine container
-conda activate tdlight
-./start_env.sh
-# Inside container: taosd &
+# Start TDengine service
+systemctl --user start taosd
 
-# Terminal 2: Start Web service
+# Start Web service
 conda activate tdlight
+source start_env.sh  # Set environment variables
 cd web
-export LD_LIBRARY_PATH=../libs:$LD_LIBRARY_PATH
 ./web_api
 ```
 
-### 8. Access
+### 7. Access
 
 Open browser and visit: **http://localhost:5001**
 
@@ -428,7 +386,7 @@ TDlight/
 │   ├── check_candidates.cpp      # Auto-classify candidate detection
 │   └── build.sh
 │
-├── classifier/          # Pre-trained models
+├── models/              # Pre-trained models (auto-downloaded)
 │   ├── lgbm_111w_model.pkl
 │   └── metadata.pkl
 │
@@ -514,7 +472,7 @@ The following files are not included in the repository due to their large size. 
 
 | File | Size | How to Obtain |
 |------|------|---------------|
-| `classifier/lgbm_111w_model.pkl` | ~250MB | Contact author for pre-trained model |
+| `models/lgbm_111w_model.pkl` | ~250MB | Auto-downloaded during installation |
 | `data/` | - | Users provide their own astronomical data |
 | `tdengine-fs/` | ~2GB | Build container using `apptainer build` |
 

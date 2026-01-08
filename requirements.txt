@@ -1,17 +1,20 @@
 # TDlight Python Dependencies
 # Install: pip install -r requirements.txt
 
+# Core dependencies
 numpy>=1.20.0
 pandas>=1.3.0
-scikit-learn>=0.24.0
-lightgbm>=3.0.0
 joblib>=1.0.0
-feets>=0.4
 
-# TDengine Python Connector
+# TDengine Python connector
 taospy>=2.7.0
 
-# Optional: for development
-# pytest>=6.0.0
-# black>=22.0.0
+# Feature extraction for light curves
+feets>=0.4
 
+# Machine learning (for classification models)
+lightgbm>=3.0.0
+scikit-learn>=1.0.0
+
+# Optional: for visualization (uncomment if needed)
+# matplotlib>=3.5.0
