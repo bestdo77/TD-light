@@ -465,6 +465,17 @@ if [ ! -f "$PROJECT_ROOT/config.json" ]; then
     if [ -f "$PROJECT_ROOT/config/config.example.json" ]; then
         print_step "Creating project configuration..."
         cp "$PROJECT_ROOT/config/config.example.json" "$PROJECT_ROOT/config.json"
+        
+        # Inject absolute python path into config.json
+        PYTHON_EXEC=$(which python3)
+        if [ -n "$PYTHON_EXEC" ]; then
+            # Use sed to replace "python": "python3" with absolute path
+            # Escape slashes in path for sed
+            ESCAPED_PYTHON_EXEC=$(echo "$PYTHON_EXEC" | sed 's/\//\\\//g')
+            sed -i "s/\"python\": \"python3\"/\"python\": \"$ESCAPED_PYTHON_EXEC\"/g" "$PROJECT_ROOT/config.json"
+            print_info "Configured Python path: $PYTHON_EXEC"
+        fi
+        
         print_success "Created: config.json (from template)"
     fi
 else

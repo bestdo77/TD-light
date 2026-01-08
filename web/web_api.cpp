@@ -2192,3 +2192,5 @@ int main() {
     taos_close(conn);
     return 0;
 }
+    return 0;
+}

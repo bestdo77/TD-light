@@ -19,7 +19,7 @@
     "paths": {
         "libs": "../libs",
         "taos_cfg": "../config/taos_cfg",
-        "python": "python",
+        "python": "python3",
         "temp_dir": "/tmp"
     },
     "healpix": {

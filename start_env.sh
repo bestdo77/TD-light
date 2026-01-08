@@ -33,36 +33,20 @@ export LD_LIBRARY_PATH="$PROJECT_ROOT/libs:$TDENGINE_HOME/driver:$LD_LIBRARY_PAT
 export PATH="$TDENGINE_HOME/bin:$PATH"
 export TAOS_CONFIG_DIR
 
-# Ensure runtime dirs exist (taosd needs writable log/data/temp)
-mkdir -p "$PROJECT_ROOT/runtime/taos_home/log" "$PROJECT_ROOT/runtime/taos_home/data" "$PROJECT_ROOT/runtime/taos_home/temp" "$TAOS_CONFIG_DIR" 2>/dev/null || true
-
-# If taos.cfg is missing (e.g., fresh clone), create a minimal one
-if [ ! -f "$TAOS_CONFIG_DIR/taos.cfg" ]; then
-    cat > "$TAOS_CONFIG_DIR/taos.cfg" << EOF
-# TDlight TDengine Configuration (auto-generated)
-fqdn               localhost
-serverPort         6030
-logDir             $PROJECT_ROOT/runtime/taos_home/log
-dataDir            $PROJECT_ROOT/runtime/taos_home/data
-tempDir            $PROJECT_ROOT/runtime/taos_home/temp
-firstEp            localhost:6030
-maxShellConns      500
-supportVnodes      256
-EOF
-fi
-
 # Start TDengine if not running
 if ! pgrep -x taosd > /dev/null; then
     echo -e "[i] Starting TDengine..."
-    # Always start with our config (avoids systemd using a different taos.cfg)
-    nohup "$TDENGINE_HOME/bin/taosd" -c "$TAOS_CONFIG_DIR" > "$PROJECT_ROOT/runtime/taosd.log" 2>&1 &
+    if [ -f "$HOME/.config/systemd/user/taosd.service" ]; then
+        systemctl --user start taosd 2>/dev/null || true
+    else
+        nohup "$TDENGINE_HOME/bin/taosd" -c "$TAOS_CONFIG_DIR" > /dev/null 2>&1 &
+    fi
     sleep 2
     
     if pgrep -x taosd > /dev/null; then
         echo -e "${GREEN}[✓] TDengine started${NC}"
     else
         echo -e "${YELLOW}[!] Failed to start TDengine${NC}"
-        echo -e "${YELLOW}    Check: cat $PROJECT_ROOT/runtime/taosd.log${NC}"
         exit 1
     fi
 else

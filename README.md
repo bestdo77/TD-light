@@ -564,3 +564,30 @@ If you use this software, please cite HEALPix:
 - [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
 - [Three.js](https://threejs.org/) - WebGL 3D Rendering
 - [Chart.js](https://www.chartjs.org/) - Chart Visualization
+
+
+| Library | License | Source |
+|---------|---------|--------|
+| CFITSIO | NASA/GSFC (BSD-like) | https://heasarc.gsfc.nasa.gov/fitsio/ |
+| HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
+| libsharp | GPL v2 | http://healpix.sourceforge.net |
+
+### HEALPix Citation
+
+If you use this software, please cite HEALPix:
+
+> K.M. Górski, E. Hivon, A.J. Banday, B.D. Wandelt, F.K. Hansen, M. Reinecke, M. Bartelmann (2005),  
+> *HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data Distributed on the Sphere*,  
+> ApJ, 622, p.759-771  
+> http://healpix.sourceforge.net
+
+---
+
+## Acknowledgments
+
+- [TDengine](https://www.taosdata.com/) - High-performance time-series database
+- [HEALPix](https://healpix.sourceforge.net/) - Hierarchical Equal Area isoLatitude Pixelization
+- [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
+- [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
+- [Three.js](https://threejs.org/) - WebGL 3D Rendering
+- [Chart.js](https://www.chartjs.org/) - Chart Visualization
