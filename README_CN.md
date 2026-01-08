@@ -396,7 +396,7 @@ TDlight/
 ├── data/                # 数据文件目录
 │   ├── lc_counts_<db>.csv           # 历史点数记录
 │   └── auto_classify_queue_<db>.csv # 待分类队列
-└── tdengine-fs/         # Apptainer 容器
+└── runtime/             # 运行时日志
 ```
 
 ---
@@ -474,7 +474,7 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 |------|------|----------|
 | `models/lgbm_111w_model.pkl` | ~250MB | 安装时自动下载 |
 | `data/` | - | 用户自备天文数据 |
-| `tdengine-fs/` | ~2GB | 使用 `apptainer build` 构建容器 |
+| TDengine | ~500MB | 安装时自动下载 |
 
 **联系方式**：如需预训练模型/部署相关问题，请联系 3023244355@tju.edu.cn。
 
@@ -486,10 +486,32 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ---
 
+## 第三方库
+
+本项目在 `libs/` 目录中包含预编译的库文件：
+
+| 库 | 许可证 | 来源 |
+|----|--------|------|
+| CFITSIO | NASA/GSFC (类 BSD) | https://heasarc.gsfc.nasa.gov/fitsio/ |
+| HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
+| libsharp | GPL v2 | http://healpix.sourceforge.net |
+| libgcc, libgomp, libstdc++ | GPL + 运行时例外 | GCC |
+
+### HEALPix 引用
+
+如果您使用本软件，请引用 HEALPix：
+
+> K.M. Górski, E. Hivon, A.J. Banday, B.D. Wandelt, F.K. Hansen, M. Reinecke, M. Bartelmann (2005),  
+> *HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data Distributed on the Sphere*,  
+> ApJ, 622, p.759-771  
+> http://healpix.sourceforge.net
+
+---
+
 ## 致谢
 
 - [TDengine](https://www.taosdata.com/) - 高性能时序数据库
-- [HEALPix](https://healpix.jpl.nasa.gov/) - 天球像素化方案
+- [HEALPix](https://healpix.sourceforge.net/) - 天球像素化方案
 - [feets](https://feets.readthedocs.io/) - 天文特征提取
 - [LightGBM](https://lightgbm.readthedocs.io/) - 梯度提升框架
 - [Three.js](https://threejs.org/) - WebGL 3D 渲染

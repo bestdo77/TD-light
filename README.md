@@ -396,7 +396,7 @@ TDlight/
 ├── data/                # Data file directory
 │   ├── lc_counts_<db>.csv           # Historical count records
 │   └── auto_classify_queue_<db>.csv # Classification queue
-└── tdengine-fs/         # Apptainer container
+└── runtime/             # Runtime logs
 ```
 
 ---
@@ -474,7 +474,7 @@ The following files are not included in the repository due to their large size. 
 |------|------|---------------|
 | `models/lgbm_111w_model.pkl` | ~250MB | Auto-downloaded during installation |
 | `data/` | - | Users provide their own astronomical data |
-| `tdengine-fs/` | ~2GB | Build container using `apptainer build` |
+| TDengine | ~500MB | Auto-downloaded during installation |
 
 **Contact**: For pre-trained models or deployment issues, please contact 3023244355@tju.edu.cn.
 
@@ -486,10 +486,32 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ---
 
+## Third-Party Libraries
+
+This project includes pre-compiled libraries in `libs/` for convenience:
+
+| Library | License | Source |
+|---------|---------|--------|
+| CFITSIO | NASA/GSFC (BSD-like) | https://heasarc.gsfc.nasa.gov/fitsio/ |
+| HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
+| libsharp | GPL v2 | http://healpix.sourceforge.net |
+| libgcc, libgomp, libstdc++ | GPL + Runtime Exception | GCC |
+
+### HEALPix Citation
+
+If you use this software, please cite HEALPix:
+
+> K.M. Górski, E. Hivon, A.J. Banday, B.D. Wandelt, F.K. Hansen, M. Reinecke, M. Bartelmann (2005),  
+> *HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data Distributed on the Sphere*,  
+> ApJ, 622, p.759-771  
+> http://healpix.sourceforge.net
+
+---
+
 ## Acknowledgments
 
 - [TDengine](https://www.taosdata.com/) - High-performance time-series database
-- [HEALPix](https://healpix.jpl.nasa.gov/) - Hierarchical Equal Area isoLatitude Pixelization
+- [HEALPix](https://healpix.sourceforge.net/) - Hierarchical Equal Area isoLatitude Pixelization
 - [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
 - [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
 - [Three.js](https://threejs.org/) - WebGL 3D Rendering
