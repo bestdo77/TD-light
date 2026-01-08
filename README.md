@@ -495,7 +495,6 @@ This project includes pre-compiled libraries in `libs/` for convenience:
 | CFITSIO | NASA/GSFC (BSD-like) | https://heasarc.gsfc.nasa.gov/fitsio/ |
 | HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
 | libsharp | GPL v2 | http://healpix.sourceforge.net |
-| libgcc, libgomp, libstdc++ | GPL + Runtime Exception | GCC |
 
 ### HEALPix Citation
 

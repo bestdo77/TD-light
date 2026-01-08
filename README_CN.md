@@ -495,7 +495,6 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 | CFITSIO | NASA/GSFC (类 BSD) | https://heasarc.gsfc.nasa.gov/fitsio/ |
 | HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
 | libsharp | GPL v2 | http://healpix.sourceforge.net |
-| libgcc, libgomp, libstdc++ | GPL + 运行时例外 | GCC |
 
 ### HEALPix 引用
 
