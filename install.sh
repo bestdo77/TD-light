@@ -481,7 +481,7 @@ if [[ "$SKIP_CONDA" != "true" ]]; then
     eval "$(conda shell.bash hook)"
     conda activate "$CONDA_ENV_NAME" 2>/dev/null
     
-    PYTHON_DEPS=("numpy" "pandas" "taospy" "lightgbm" "sklearn" "joblib")
+    PYTHON_DEPS=("numpy" "pandas" "taos" "lightgbm" "sklearn" "joblib")
     for dep in "${PYTHON_DEPS[@]}"; do
         if python -c "import $dep" 2>/dev/null; then
             print_success "Python: $dep"
