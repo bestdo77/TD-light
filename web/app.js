@@ -23,6 +23,8 @@ window.loadConfig = async function() {
         document.getElementById('configDbHost').value = config.database?.host || '';
         document.getElementById('configDbPort').value = config.database?.port || '';
         document.getElementById('configDbUser').value = config.database?.user || '';
+        document.getElementById('configThreads').value = config.import?.threads || 16;
+        document.getElementById('configVgroups').value = config.import?.vgroups || 32;
         document.getElementById('configThreshold').value = config.classification?.confidence_threshold || 0.95;
         document.getElementById('configModelPath').value = config.classification?.model_path || '';
         
@@ -56,6 +58,8 @@ window.saveConfig = async function() {
             db_name: document.getElementById('configDbName').value,
             db_host: document.getElementById('configDbHost').value,
             db_port: parseInt(document.getElementById('configDbPort').value) || 6041,
+            threads: parseInt(document.getElementById('configThreads').value) || 16,
+            vgroups: parseInt(document.getElementById('configVgroups').value) || 32,
             confidence_threshold: parseFloat(document.getElementById('configThreshold').value) || 0.95
         };
         const response = await fetch('/api/config', {
@@ -1125,6 +1129,10 @@ async function startImportTask(type, path, coordsPath, dbName, nside) {
     document.getElementById('importProgressBar').style.width = '0%';
     document.getElementById('importStats').innerHTML = '';
     
+    // Get threads and vgroups from settings
+    const threads = parseInt(document.getElementById('configThreads')?.value) || 16;
+    const vgroups = parseInt(document.getElementById('configVgroups')?.value) || 32;
+    
     try {
         if (importEventSource) {
             importEventSource.close();
@@ -1139,7 +1147,7 @@ async function startImportTask(type, path, coordsPath, dbName, nside) {
         fetch('/api/import/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, path, coords_path: coordsPath, db_name: dbName, nside })
+            body: JSON.stringify({ type, path, coords_path: coordsPath, db_name: dbName, nside, threads, vgroups })
         }).then(r => r.json()).then(result => {
             if (result.success) {
                 console.log('[POST] Import started');

@@ -90,8 +90,9 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
    - Automatically writes high-confidence results back to TDengine
 
 4. **Data Importers (catalog_importer / lightcurve_importer)**
-   - Standalone C++ programs with 64-thread parallel import
-   - Launched by web_api, progress communicated via files
+   - Standalone C++ programs with multi-threaded parallel import
+   - Web import defaults: 16 threads, 32 VGroups (for compatibility)
+   - Command line customizable: `--threads N --vgroups N`
    - Frontend displays real-time progress via SSE
 
 ---
@@ -222,7 +223,34 @@ Open browser and visit: **http://localhost:5001**
 
 ### Import Method
 
-Via Web interface → "Data Import" tab.
+**Web Interface**: Click "Data Import" tab (defaults: 16 threads, 32 VGroups)
+
+**Command Line** (customizable parameters):
+
+```bash
+# Catalog import
+./insert/catalog_importer \
+    --catalogs /path/to/catalogs \
+    --coords /path/to/coordinates.csv \
+    --db gaiadr2_lc \
+    --threads 64 \      # Thread count (default: 16)
+    --vgroups 128       # VGroups count (default: 32)
+
+# Light curve import
+./insert/lightcurve_importer \
+    --lightcurves_dir /path/to/lightcurves \
+    --coords /path/to/coordinates.csv \
+    --db gaiadr2_lc \
+    --threads 64 \
+    --vgroups 128
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--threads` | 16 | Parallel thread count |
+| `--vgroups` | 32 | Database VGroups count |
+| `--nside` | 64 | HEALPix NSIDE (catalog only) |
+| `--drop_db` | - | Drop existing database |
 
 ### Required Files
 

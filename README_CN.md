@@ -90,8 +90,9 @@
    - 高置信度结果自动写回 TDengine
 
 4. **数据导入器 (catalog_importer / lightcurve_importer)**
-   - 独立 C++ 程序，64 线程并行导入
-   - 通过 web_api 启动，进度通过文件通信
+   - 独立 C++ 程序，支持多线程并行导入
+   - Web 导入默认: 16 线程，32 VGroups（兼容小配置）
+   - 命令行可自定义: `--threads N --vgroups N`
    - 前端通过 SSE 实时显示进度
 
 ---
@@ -222,7 +223,34 @@ cd web
 
 ### 导入方式
 
-通过 Web 界面 → "数据导入" 标签页操作。
+**Web 界面**：点击 "数据导入" 标签页（默认 16 线程，32 VGroups）
+
+**命令行**（可自定义参数）：
+
+```bash
+# 星表导入
+./insert/catalog_importer \
+    --catalogs /path/to/catalogs \
+    --coords /path/to/coordinates.csv \
+    --db gaiadr2_lc \
+    --threads 64 \      # 线程数（默认 16）
+    --vgroups 128       # VGroups 数（默认 32）
+
+# 光变曲线导入
+./insert/lightcurve_importer \
+    --lightcurves_dir /path/to/lightcurves \
+    --coords /path/to/coordinates.csv \
+    --db gaiadr2_lc \
+    --threads 64 \
+    --vgroups 128
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--threads` | 16 | 并行线程数 |
+| `--vgroups` | 32 | 数据库 VGroups 数 |
+| `--nside` | 64 | HEALPix NSIDE（仅 catalog） |
+| `--drop_db` | - | 删除已存在的数据库 |
 
 ### 必需文件
 

@@ -1185,6 +1185,27 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-upload"></i></div>
+                            <span>导入配置</span>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">线程数</label>
+                            <input type="number" class="form-input" id="configThreads" value="16" min="1" max="128" placeholder="16">
+                            <small style="color: #888; font-size: 11px;">建议: 低配 8-16, 高配 32-64</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">VGroups 数</label>
+                            <input type="number" class="form-input" id="configVgroups" value="32" min="1" max="256" placeholder="32">
+                            <small style="color: #888; font-size: 11px;">建议: 低配 16-32, 高配 64-128</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
                             <span>分类配置</span>
                         </div>

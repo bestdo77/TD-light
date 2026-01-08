@@ -1506,6 +1506,8 @@ string handle_request(const string& request) {
         string coords_path = json_get_string(body, "coords_path");
         string db_name = json_get_string(body, "db_name");
         int nside = json_get_int(body, "nside", 64);
+        int threads = json_get_int(body, "threads", 16);
+        int vgroups = json_get_int(body, "vgroups", 32);
         
         if (data_path.empty() || coords_path.empty()) {
             string err = "{\"success\":false,\"error\":\"Missing path or coords_path\"}";
@@ -1542,7 +1544,8 @@ string handle_request(const string& request) {
                   "--coords " + coords_path + " "
                   "--db " + db_name + " "
                   "--nside " + to_string(nside) + " "
-                  "--threads 16 --vgroups 32"
+                  "--threads " + to_string(threads) + " "
+                  "--vgroups " + to_string(vgroups) +
                   "' > /tmp/import.log 2>&1 &";
         } else {
             cmd = "nohup bash -c '" + env_prefix + 
@@ -1550,7 +1553,8 @@ string handle_request(const string& request) {
                   "--lightcurves_dir " + data_path + " "
                   "--coords " + coords_path + " "
                   "--db " + db_name + " "
-                  "--threads 16 --vgroups 32"
+                  "--threads " + to_string(threads) + " "
+                  "--vgroups " + to_string(vgroups) +
                   "' > /tmp/import.log 2>&1 &";
         }
         
