@@ -384,15 +384,33 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Derive config directory from executable path (supports launching from any working directory)
-    string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
-    string taos_cfg_dir = exe_path + "/../runtime/taos_home/cfg";
-    if (!fs::exists(taos_cfg_dir)) {
-        // Fallback: try current directory
-        taos_cfg_dir = fs::current_path().string() + "/taos_home/cfg";
+    // Derive config directory: prefer env var, then project paths
+    string taos_cfg_dir;
+    const char* env_cfg = getenv("TAOS_CFG_DIR");
+    if (env_cfg && strlen(env_cfg) > 0 && fs::exists(env_cfg)) {
+        taos_cfg_dir = env_cfg;
+    } else {
+        // Try paths relative to executable
+        string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
+        vector<string> candidates = {
+            exe_path + "/../config/taos_cfg",
+            exe_path + "/../runtime/taos_home/cfg",
+            fs::current_path().string() + "/config/taos_cfg",
+            fs::current_path().string() + "/../config/taos_cfg"
+        };
+        for (const auto& path : candidates) {
+            if (fs::exists(path)) {
+                taos_cfg_dir = path;
+                break;
+            }
+        }
     }
-    if (fs::exists(taos_cfg_dir)) {
+    
+    if (!taos_cfg_dir.empty()) {
         taos_options(TSDB_OPTION_CONFIGDIR, taos_cfg_dir.c_str());
+        cout << "[INFO] TDengine config: " << taos_cfg_dir << endl;
+    } else {
+        cerr << "[WARN] No TDengine config found. Set TAOS_CFG_DIR or run from project root." << endl;
     }
     taos_init();
     

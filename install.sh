@@ -251,10 +251,12 @@ mkdir -p "$MODELS_DIR"
 mkdir -p "$RUNTIME_DIR/taos_home/log"
 mkdir -p "$RUNTIME_DIR/taos_home/data"
 mkdir -p "$RUNTIME_DIR/taos_home/temp"
+mkdir -p "$PROJECT_ROOT/data"
 
 print_success "Created: $THIRD_PARTY_DIR"
 print_success "Created: $MODELS_DIR"
 print_success "Created: $RUNTIME_DIR"
+print_success "Created: data/"
 
 #=============================================================================
 # Step 3: Download Resources

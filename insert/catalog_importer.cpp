@@ -324,15 +324,33 @@ int main(int argc, char* argv[]) {
     PerfStats stats;
     auto total_start = high_resolution_clock::now();
     
-    // Derive config directory from executable path (supports launching from any working directory)
-    string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
-    string taos_cfg_dir = exe_path + "/../runtime/taos_home/cfg";
-    if (!fs::exists(taos_cfg_dir)) {
-        // Fallback: try current directory
-        taos_cfg_dir = fs::current_path().string() + "/taos_home/cfg";
+    // Derive config directory: prefer env var, then project paths
+    string taos_cfg_dir;
+    const char* env_cfg = getenv("TAOS_CFG_DIR");
+    if (env_cfg && strlen(env_cfg) > 0 && fs::exists(env_cfg)) {
+        taos_cfg_dir = env_cfg;
+    } else {
+        // Try paths relative to executable
+        string exe_path = fs::canonical("/proc/self/exe").parent_path().string();
+        vector<string> candidates = {
+            exe_path + "/../config/taos_cfg",
+            exe_path + "/../runtime/taos_home/cfg",
+            fs::current_path().string() + "/config/taos_cfg",
+            fs::current_path().string() + "/../config/taos_cfg"
+        };
+        for (const auto& path : candidates) {
+            if (fs::exists(path)) {
+                taos_cfg_dir = path;
+                break;
+            }
+        }
     }
-    if (fs::exists(taos_cfg_dir)) {
+    
+    if (!taos_cfg_dir.empty()) {
         taos_options(TSDB_OPTION_CONFIGDIR, taos_cfg_dir.c_str());
+        cout << "[INFO] TDengine config: " << taos_cfg_dir << endl;
+    } else {
+        cerr << "[WARN] No TDengine config found. Set TAOS_CFG_DIR or run from project root." << endl;
     }
     
     // Initialize TDengine
@@ -483,7 +501,8 @@ int main(int argc, char* argv[]) {
             rec.band = parts[4];  // band
             double time_days = stod(parts[5]);  // time
             // Gaia time is relative to J2010.0 TCB (JD 2455197.5)
-            rec.ts_ms = static_cast<int64_t>((time_days + 2455197.5 - 2451545.0) * 86400000);
+            // Convert to Unix timestamp: subtract Unix Epoch JD (2440587.5), not J2000 (2451545.0)
+            rec.ts_ms = static_cast<int64_t>((time_days + 2455197.5 - 2440587.5) * 86400000);
             rec.flux = stod(parts[6]);  // flux
             rec.flux_error = stod(parts[7]);  // flux_err
             rec.mag = stod(parts[8]);  // mag

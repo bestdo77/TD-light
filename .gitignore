@@ -57,3 +57,12 @@ Thumbs.db
 *~
 
 query/optimized_query
+# Test data (extracted from tar.gz)
+testdata/catalogs/
+testdata/lightcurves/
+testdata/source_coordinates.csv
+
+# Runtime data
+runtime/
+data/*.csv
+*.log
