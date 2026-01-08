@@ -28,8 +28,8 @@ using namespace std;
 using namespace std::chrono;
 
 // ==================== Configuration Parameters ====================
-constexpr int NUM_THREADS = 64;           // Number of parallel threads
-constexpr int NUM_VGROUPS = 128;          // Number of virtual groups
+int NUM_THREADS = 16;                     // Number of parallel threads (default: 16 for web)
+int NUM_VGROUPS = 32;                     // Number of virtual groups (default: 32 for compatibility)
 constexpr int BATCH_SIZE = 10000;         // Rows per insert batch
 constexpr int BUFFER_SIZE = 256;          // Memory buffer per vgroup (MB)
 
@@ -292,6 +292,8 @@ int main(int argc, char* argv[]) {
         else if (arg == "--coords" && i + 1 < argc) coords_file = argv[++i];
         else if (arg == "--db" && i + 1 < argc) db_name = argv[++i];
         else if (arg == "--nside" && i + 1 < argc) nside = stoi(argv[++i]);
+        else if (arg == "--threads" && i + 1 < argc) NUM_THREADS = stoi(argv[++i]);
+        else if (arg == "--vgroups" && i + 1 < argc) NUM_VGROUPS = stoi(argv[++i]);
         else if (arg == "--drop_db") drop_db = true;
     }
     
@@ -300,6 +302,8 @@ int main(int argc, char* argv[]) {
         cout << "\nOptions:" << endl;
         cout << "  --db <name>         Database name (default: gaiadr2_lc)" << endl;
         cout << "  --nside <N>         HEALPix NSIDE (default: 64)" << endl;
+        cout << "  --threads <N>       Number of threads (default: 16)" << endl;
+        cout << "  --vgroups <N>       Number of VGroups (default: 32)" << endl;
         cout << "  --drop_db           Drop existing database" << endl;
         return 1;
     }

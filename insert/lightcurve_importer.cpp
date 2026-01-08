@@ -35,7 +35,8 @@ using namespace std::chrono;
 namespace fs = std::filesystem;
 
 // ==================== Configuration Parameters ====================
-constexpr int NUM_THREADS = 64;           // Number of threads
+int NUM_THREADS = 16;                     // Number of threads (default: 16 for web)
+int NUM_VGROUPS = 32;                     // Number of VGroups (default: 32 for compatibility)
 constexpr int CREATE_TABLE_BATCH = 2000;  // Tables per batch (increased)
 constexpr int TAOS_PORT = 6030;
 
@@ -368,11 +369,18 @@ int main(int argc, char* argv[]) {
         if (arg == "--lightcurves_dir" && i + 1 < argc) lc_dir = argv[++i];
         else if (arg == "--coords" && i + 1 < argc) coords_file = argv[++i];
         else if (arg == "--db" && i + 1 < argc) db_name = argv[++i];
+        else if (arg == "--threads" && i + 1 < argc) NUM_THREADS = stoi(argv[++i]);
+        else if (arg == "--vgroups" && i + 1 < argc) NUM_VGROUPS = stoi(argv[++i]);
         else if (arg == "--drop_db") drop_db = true;
     }
     
     if (lc_dir.empty() || coords_file.empty()) {
-        cerr << "Usage: " << argv[0] << " --lightcurves_dir <dir> --coords <file> [--db <name>] [--drop_db]" << endl;
+        cerr << "Usage: " << argv[0] << " --lightcurves_dir <dir> --coords <file> [options]" << endl;
+        cerr << "Options:" << endl;
+        cerr << "  --db <name>       Database name (default: gaiadr2_lc)" << endl;
+        cerr << "  --threads <N>     Number of threads (default: 16)" << endl;
+        cerr << "  --vgroups <N>     Number of VGroups (default: 32)" << endl;
+        cerr << "  --drop_db         Drop existing database" << endl;
         return 1;
     }
     
@@ -392,6 +400,7 @@ int main(int argc, char* argv[]) {
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     cout << "[INFO] Data directory: " << lc_dir << endl;
     cout << "[INFO] Threads: " << NUM_THREADS << endl;
+    cout << "[INFO] VGroups: " << NUM_VGROUPS << endl;
     cout << "[INFO] Port: " << TAOS_PORT << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
@@ -412,7 +421,7 @@ int main(int argc, char* argv[]) {
         taos_query(conn, ("DROP DATABASE IF EXISTS " + db_name).c_str());
     }
     // Specify more vgroups when creating database to avoid disk flush bottleneck
-    taos_query(conn, ("CREATE DATABASE IF NOT EXISTS " + db_name + " KEEP 36500 VGROUPS 128 BUFFER 256").c_str());
+    taos_query(conn, ("CREATE DATABASE IF NOT EXISTS " + db_name + " KEEP 36500 VGROUPS " + to_string(NUM_VGROUPS) + " BUFFER 256").c_str());
     taos_query(conn, ("USE " + db_name).c_str());
     taos_query(conn, ("CREATE STABLE IF NOT EXISTS " + super_table + 
                      " (ts TIMESTAMP, band NCHAR(16), mag DOUBLE, mag_error DOUBLE, "

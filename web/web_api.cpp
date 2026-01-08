@@ -1541,14 +1541,16 @@ string handle_request(const string& request) {
                   "--catalogs " + data_path + " "
                   "--coords " + coords_path + " "
                   "--db " + db_name + " "
-                  "--nside " + to_string(nside) + 
+                  "--nside " + to_string(nside) + " "
+                  "--threads 16 --vgroups 32"
                   "' > /tmp/import.log 2>&1 &";
         } else {
             cmd = "nohup bash -c '" + env_prefix + 
                   "../insert/lightcurve_importer "
                   "--lightcurves_dir " + data_path + " "
                   "--coords " + coords_path + " "
-                  "--db " + db_name + 
+                  "--db " + db_name + " "
+                  "--threads 16 --vgroups 32"
                   "' > /tmp/import.log 2>&1 &";
         }
         
