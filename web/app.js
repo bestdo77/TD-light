@@ -46,9 +46,9 @@ window.loadConfig = async function() {
             console.error('Failed to load databases:', e);
         }
 
-        showToast('配置加载成功', 'success');
+        showToast(tMsg('msg_config_loaded'), 'success');
     } catch (e) {
-        showToast('加载配置失败: ' + e.message, 'error');
+        showToast(tMsg('msg_config_load_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -69,12 +69,12 @@ window.saveConfig = async function() {
         });
         const result = await response.json();
         if (result.success) {
-            showToast('配置已保存！重启服务后生效。', 'success');
+            showToast(tMsg('msg_config_saved'), 'success');
         } else {
-            showToast('保存失败: ' + (result.error || '未知错误'), 'error');
+            showToast(tMsg('msg_config_save_failed') + ': ' + (result.error || ''), 'error');
         }
     } catch (e) {
-        showToast('保存配置失败: ' + e.message, 'error');
+        showToast(tMsg('msg_config_save_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -106,13 +106,13 @@ window.syncConfigFromFile = async function() {
             nsideInput.value = config.healpix.nside;
         }
         
-        showToast('配置已同步: ' + (config.database?.name || ''), 'success');
+        showToast(tMsg('msg_config_synced') + ': ' + (config.database?.name || ''), 'success');
         
         // 刷新待分类数量
         window.onDbNameChange();
         
     } catch (e) {
-        showToast('同步配置失败: ' + e.message, 'error');
+        showToast(tMsg('msg_config_sync_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -135,7 +135,7 @@ window.reloadConfigBackend = async function() {
         const saveResult = await saveResponse.json();
         
         if (!saveResult.success) {
-            showToast('保存配置失败: ' + (saveResult.error || '未知错误'), 'error');
+            showToast(tMsg('msg_config_save_failed') + ': ' + (saveResult.error || ''), 'error');
             return;
         }
         
@@ -144,12 +144,12 @@ window.reloadConfigBackend = async function() {
         const reloadResult = await reloadResponse.json();
         
         if (reloadResult.success) {
-            showToast('配置已保存并应用到后端！', 'success');
+            showToast(tMsg('msg_config_applied'), 'success');
         } else {
-            showToast('应用失败: ' + (reloadResult.error || '未知错误'), 'error');
+            showToast(tMsg('msg_apply_failed') + ': ' + (reloadResult.error || ''), 'error');
         }
     } catch (e) {
-        showToast('应用配置失败: ' + e.message, 'error');
+        showToast(tMsg('msg_apply_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -159,12 +159,12 @@ window.performConeSearch = async function(appendMode = false) {
     const radius = parseFloat(document.getElementById('radius').value);
     
     if (isNaN(ra) || isNaN(dec) || isNaN(radius)) {
-        showToast('请输入有效的 RA, DEC 和半径', 'error');
+        showToast(tMsg('msg_enter_valid_coords'), 'error');
         return;
     }
     
     try {
-        showToast('正在搜索...', 'success');
+        showToast(tMsg('msg_searching'), 'success');
         const response = await fetch(`/api/cone_search?ra=${ra}&dec=${dec}&radius=${radius}&limit=200`);
         const data = await response.json();
         
@@ -176,29 +176,29 @@ window.performConeSearch = async function(appendMode = false) {
                 if (newObjects.length > 0) {
                     currentObjects = [...currentObjects, ...newObjects];
                     selectedObjects = [...selectedObjects, ...newObjects.map(obj => ({...obj, selected: true}))];
-                    showToast(`追加了 ${newObjects.length} 个天体`, 'success');
+                    showToast(tMsg('msg_appended_objects', newObjects.length), 'success');
                 } else {
-                    showToast('所有天体已在列表中', 'error');
+                    showToast(tMsg('msg_all_in_list'), 'error');
                 }
             } else {
                 currentObjects = data.objects;
                 selectedObjects = data.objects.map(obj => ({...obj, selected: true}));
-                showToast(`找到 ${data.objects.length} 个天体`, 'success');
+                showToast(tMsg('msg_found_objects', data.objects.length), 'success');
             }
             updateObjectList();
             plotSkyMap(currentObjects, appendMode ? null : {ra, dec, radius});
         } else {
-            showToast('该区域未找到天体', 'error');
+            showToast(tMsg('msg_no_objects_found'), 'error');
         }
     } catch (error) {
-        showToast('搜索失败: ' + error.message, 'error');
+        showToast(tMsg('msg_search_failed') + ': ' + error.message, 'error');
     }
 };
 
 window.searchById = async function(appendMode = false) {
     const input = document.getElementById('searchSourceId').value.trim();
     if (!input) {
-        showToast('请输入 Source ID', 'error');
+        showToast(tMsg('msg_enter_source_id'), 'error');
         return;
     }
     
@@ -207,12 +207,12 @@ window.searchById = async function(appendMode = false) {
         .filter(line => line.length > 0);
     
     if (ids.length === 0) {
-        showToast('请输入有效的 Source ID', 'error');
+        showToast(tMsg('msg_enter_valid_id'), 'error');
         return;
     }
     
     try {
-        showToast(`正在检索 ${ids.length} 个ID...`, 'success');
+        showToast(tMsg('msg_retrieving', ids.length), 'success');
         
         const foundObjects = [];
         const notFound = [];
@@ -239,14 +239,14 @@ window.searchById = async function(appendMode = false) {
                 if (newObjects.length > 0) {
                     currentObjects = [...currentObjects, ...newObjects];
                     selectedObjects = [...selectedObjects, ...newObjects.map(obj => ({...obj, selected: true}))];
-                    showToast(`追加了 ${newObjects.length} 个天体`, 'success');
+                    showToast(tMsg('msg_appended_objects', newObjects.length), 'success');
                 } else {
-                    showToast('所有天体已在列表中', 'error');
+                    showToast(tMsg('msg_all_in_list'), 'error');
                 }
             } else {
                 currentObjects = foundObjects;
                 selectedObjects = foundObjects.map(obj => ({...obj, selected: true}));
-                showToast(`找到 ${foundObjects.length} 个天体`, 'success');
+                showToast(tMsg('msg_found_objects', foundObjects.length), 'success');
             }
             
             updateObjectList();
@@ -260,14 +260,14 @@ window.searchById = async function(appendMode = false) {
                 document.getElementById('objectInfo').textContent = 'Source ID: ' + obj.source_id;
             }
         } else {
-            showToast('未找到任何天体', 'error');
+            showToast(tMsg('msg_not_found'), 'error');
         }
         
         if (notFound.length > 0) {
             console.log('IDs not found:', notFound);
         }
     } catch (error) {
-        showToast('检索失败: ' + error.message, 'error');
+        showToast(tMsg('msg_retrieve_failed') + ': ' + error.message, 'error');
     }
 };
 
@@ -282,7 +282,7 @@ window.clearObjectList = function() {
     const skyMap3DEl = document.getElementById('skyMap3D');
     if (skyMap3DEl) skyMap3DEl.innerHTML = '';
     
-    showToast('已清空列表', 'success');
+    showToast(tMsg('msg_list_cleared'), 'success');
 };
 
 window.selectAllObjects = function(selectAll) {
@@ -297,17 +297,17 @@ window.performRectSearch = async function(appendMode = false) {
     const decMax = parseFloat(document.getElementById('decMax').value);
     
     if (isNaN(raMin) || isNaN(raMax) || isNaN(decMin) || isNaN(decMax)) {
-        showToast('请输入有效的坐标范围', 'error');
+        showToast(tMsg('msg_enter_valid_range'), 'error');
         return;
     }
     
     if (raMin >= raMax || decMin >= decMax) {
-        showToast('最小值必须小于最大值', 'error');
+        showToast(tMsg('msg_min_less_max'), 'error');
         return;
     }
     
     try {
-        showToast('正在搜索...', 'success');
+        showToast(tMsg('msg_searching'), 'success');
         const response = await fetch(`/api/region_search?ra_min=${raMin}&ra_max=${raMax}&dec_min=${decMin}&dec_max=${decMax}&limit=200`);
         const data = await response.json();
         
@@ -319,22 +319,22 @@ window.performRectSearch = async function(appendMode = false) {
                 if (newObjects.length > 0) {
                     currentObjects = [...currentObjects, ...newObjects];
                     selectedObjects = [...selectedObjects, ...newObjects.map(obj => ({...obj, selected: true}))];
-                    showToast(`追加了 ${newObjects.length} 个天体`, 'success');
+                    showToast(tMsg('msg_appended_objects', newObjects.length), 'success');
                 } else {
-                    showToast('所有天体已在列表中', 'error');
+                    showToast(tMsg('msg_all_in_list'), 'error');
                 }
             } else {
                 currentObjects = data.objects;
                 selectedObjects = data.objects.map(obj => ({...obj, selected: true}));
-                showToast(`找到 ${data.objects.length} 个天体`, 'success');
+                showToast(tMsg('msg_found_objects', data.objects.length), 'success');
             }
             updateObjectList();
             plotSkyMap(currentObjects, null);
         } else {
-            showToast('该区域未找到天体', 'error');
+            showToast(tMsg('msg_no_objects_found'), 'error');
         }
     } catch (error) {
-        showToast('搜索失败: ' + error.message, 'error');
+        showToast(tMsg('msg_search_failed') + ': ' + error.message, 'error');
     }
 };
 
@@ -379,7 +379,7 @@ window.toggleObjectSelection = function(idx) {
 window.viewObject = async function(sourceId) {
     let obj = selectedObjects.find(o => String(o.source_id) === String(sourceId));
     if (!obj || !obj.table_name) {
-        showToast('未找到天体信息', 'error');
+        showToast(tMsg('msg_object_not_found'), 'error');
         return;
     }
     
@@ -414,10 +414,10 @@ window.viewObject = async function(sourceId) {
                 plotSkyMap(currentObjects, currentConeRegion);
             }
         } else {
-            showToast('未找到光变曲线数据', 'error');
+            showToast(tMsg('msg_no_lc_data'), 'error');
         }
     } catch (error) {
-        showToast('获取光变曲线失败: ' + error.message, 'error');
+        showToast(tMsg('msg_get_lc_failed') + ': ' + error.message, 'error');
     }
 };
 
@@ -437,7 +437,7 @@ let classifyEventSource = null;
 window.classifySelectedObjects = async function() {
     const selected = selectedObjects.filter(o => o.selected);
     if (selected.length === 0) {
-        showToast('请先选择要分类的天体', 'error');
+        showToast(tMsg('msg_select_objects'), 'error');
         return;
     }
     
@@ -511,7 +511,7 @@ window.classifySelectedObjects = async function() {
                     if (data.results && data.results.length > 0) {
                         displayResults(data.results);
                         updateStepIndicator(3); 
-                        showToast(`成功分类 ${data.results.length} 个天体！`, 'success');
+                        showToast(tMsg('msg_classify_success', data.results.length), 'success');
                     }
                     
                     finishClassification();
@@ -564,7 +564,7 @@ window.stopClassification = async function() {
         await fetch('/api/classify_stop');
         isClassificationRunning = false;
         
-        showToast('分类已停止', 'success');
+        showToast(tMsg('msg_classify_stopped'), 'success');
         
         if (classifyBtn) {
             classifyBtn.disabled = false;
@@ -1012,7 +1012,7 @@ function plotLightcurve(data) {
 
 window.downloadObjectList = function() {
     if (selectedObjects.length === 0) {
-        showToast('列表为空', 'error');
+        showToast(tMsg('msg_list_empty'), 'error');
         return;
     }
     
@@ -1042,7 +1042,7 @@ window.downloadObjectList = function() {
 
 window.downloadLightcurve = function() {
     if (!currentLightcurveData || currentLightcurveData.length === 0) {
-        showToast('没有光变曲线数据', 'error');
+        showToast(tMsg('msg_no_lc_data_download'), 'error');
         return;
     }
     
@@ -1082,6 +1082,11 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// Helper function for localized messages with parameters
+function tMsg(key, ...args) {
+    return typeof t === 'function' ? t(key, ...args) : key;
+}
+
 // ==================== 数据导入功能 ====================
 
 let importEventSource = null;
@@ -1093,11 +1098,11 @@ window.startCatalogImport = async function() {
     const nside = parseInt(document.getElementById('importNside').value) || 64;
     
     if (!path) {
-        showToast('请输入星表目录路径', 'error');
+        showToast(tMsg('msg_enter_catalog_path'), 'error');
         return;
     }
     if (!coordsPath) {
-        showToast('请输入坐标文件路径', 'error');
+        showToast(tMsg('msg_enter_coords_path'), 'error');
         return;
     }
     
@@ -1111,11 +1116,11 @@ window.startLightcurveImport = async function() {
     const nside = parseInt(document.getElementById('importNside').value) || 64;
     
     if (!path) {
-        showToast('请输入光变曲线目录路径', 'error');
+        showToast(tMsg('msg_enter_lc_path'), 'error');
         return;
     }
     if (!coordsPath) {
-        showToast('请输入坐标文件路径', 'error');
+        showToast(tMsg('msg_enter_coords_path'), 'error');
         return;
     }
     
@@ -1151,14 +1156,14 @@ async function startImportTask(type, path, coordsPath, dbName, nside) {
         }).then(r => r.json()).then(result => {
             if (result.success) {
                 console.log('[POST] Import started');
-                showToast('导入任务已启动', 'success');
+                showToast(tMsg('msg_import_started'), 'success');
             } else {
                 console.error('[POST] Import failed:', result.error);
-                showToast('启动导入失败: ' + result.error, 'error');
+                showToast(tMsg('msg_import_start_failed') + ': ' + result.error, 'error');
             }
         }).catch(e => {
             console.error('[POST] Import error:', e);
-            showToast('启动导入失败: ' + e.message, 'error');
+            showToast(tMsg('msg_import_start_failed') + ': ' + e.message, 'error');
         });
         
         importEventSource.onopen = () => {
@@ -1227,16 +1232,26 @@ async function startImportTask(type, path, coordsPath, dbName, nside) {
                     importEventSource = null;
                     
                     if (data.status === 'stopped') {
-                        showToast('导入已停止', 'warning');
+                        showToast(tMsg('msg_import_stopped'), 'warning');
                     } else {
-                        showToast('导入完成!', 'success');
+                        showToast(tMsg('msg_import_complete'), 'success');
                         updateImportStep(2);
                         
-                        // 刷新待分类天体数量并提示
+                        // 刷新待分类天体数量并自动启动分类
                         setTimeout(async () => {
                             const count = await window.refreshPendingCount();
                             if (count > 0) {
-                                showToast(`检测到 ${count} 个天体待分类，可在下方启动自动分类`, 'success');
+                                showToast(tMsg('msg_auto_detect_hint', count), 'success');
+                                
+                                // 检查是否启用自动分类
+                                const autoClassifyCheckbox = document.getElementById('autoClassifyAfterImport');
+                                if (autoClassifyCheckbox && autoClassifyCheckbox.checked) {
+                                    // 延迟1秒后自动开始分类
+                                    setTimeout(() => {
+                                        showToast(tMsg('msg_auto_starting'), 'success');
+                                        window.startAutoClassify(false);
+                                    }, 1000);
+                                }
                             }
                         }, 500);
                     }
@@ -1293,18 +1308,18 @@ window.stopImport = async function() {
         }
         
         if (result.success) {
-            showToast('导入已停止', 'warning');
+            showToast(tMsg('msg_import_stopped'), 'warning');
             // 更新 UI
-            document.getElementById('importProgressText').textContent = '已手动停止';
+            document.getElementById('importProgressText').textContent = tMsg('msg_import_stopped');
             document.getElementById('importProgressPercent').textContent = '-';
             const pBar = document.getElementById('importProgressBar');
             if (pBar) pBar.style.width = '0%';
             updateImportStep(0);
         } else {
-            showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+            showToast(tMsg('msg_stop_failed') + ': ' + (result.error || ''), 'error');
         }
     } catch (e) {
-        showToast('停止失败: ' + e.message, 'error');
+        showToast(tMsg('msg_stop_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -1316,7 +1331,7 @@ window.refreshDbList = async function() {
         const data = await resp.json();
         
         const select = document.getElementById('dropDbSelect');
-        select.innerHTML = '<option value="">-- 选择数据库 --</option>';
+        select.innerHTML = '<option value="">' + tMsg('select_database') + '</option>';
         
         if (data.databases && data.databases.length > 0) {
             for (const db of data.databases) {
@@ -1327,12 +1342,12 @@ window.refreshDbList = async function() {
                 opt.textContent = db;
                 select.appendChild(opt);
             }
-            showToast(`已刷新，共 ${data.databases.length - 2} 个用户数据库`, 'success');
+            showToast(tMsg('msg_db_refreshed', data.databases.length - 2), 'success');
         } else {
-            showToast('没有用户数据库', 'warning');
+            showToast(tMsg('msg_no_user_db'), 'warning');
         }
     } catch (e) {
-        showToast('刷新失败: ' + e.message, 'error');
+        showToast(tMsg('msg_refresh_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -1341,11 +1356,11 @@ window.dropSelectedDatabase = async function() {
     const dbName = select.value;
     
     if (!dbName) {
-        showToast('请先选择要删除的数据库', 'warning');
+        showToast(tMsg('msg_select_db_delete'), 'warning');
         return;
     }
     
-    if (!confirm(`确定要删除数据库 "${dbName}" 吗？\n\n此操作不可恢复！`)) {
+    if (!confirm(tMsg('msg_confirm_delete', dbName))) {
         return;
     }
     
@@ -1358,13 +1373,13 @@ window.dropSelectedDatabase = async function() {
         const data = await resp.json();
         
         if (data.success) {
-            showToast(`数据库 ${dbName} 已删除`, 'success');
+            showToast(tMsg('msg_db_deleted', dbName), 'success');
             window.refreshDbList();
         } else {
-            showToast('删除失败: ' + data.error, 'error');
+            showToast(tMsg('msg_delete_failed') + ': ' + data.error, 'error');
         }
     } catch (e) {
-        showToast('删除失败: ' + e.message, 'error');
+        showToast(tMsg('msg_delete_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -1384,10 +1399,10 @@ window.refreshPendingCount = async function(runCheck = true) {
         // 显示检测中状态
         if (runCheck) {
             if (countEl) countEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            if (hint) hint.textContent = '正在查询数据库...';
+            if (hint) hint.textContent = tMsg('msg_detection_querying');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
-                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 查询中';
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + tMsg('query');
             }
             
             // 触发检测（如果没填数据库名，让后端用默认配置）
@@ -1399,7 +1414,7 @@ window.refreshPendingCount = async function(runCheck = true) {
             const checkData = await checkResp.json();
             
             if (!checkData.success) {
-                showToast('检测失败: ' + (checkData.error || '未知错误'), 'error');
+                showToast(tMsg('msg_detection_failed') + ': ' + (checkData.error || ''), 'error');
             } else {
                 // 使用返回的数据库名（可能是默认配置）
                 dbName = checkData.db_name || dbName;
@@ -1418,9 +1433,9 @@ window.refreshPendingCount = async function(runCheck = true) {
         if (hint) {
             if (count > 0) {
                 const batches = Math.ceil(count / batchSize);
-                hint.innerHTML = `<strong>${dbName}</strong>: ${count.toLocaleString()} 条，分 ${batches} 批`;
+                hint.innerHTML = `<strong>${dbName}</strong>: ` + tMsg('msg_queue_info', count.toLocaleString(), batches);
             } else {
-                hint.innerHTML = `<strong>${dbName}</strong>: 队列为空`;
+                hint.innerHTML = `<strong>${dbName}</strong>: ` + tMsg('msg_queue_empty');
             }
         }
         
@@ -1433,12 +1448,12 @@ window.refreshPendingCount = async function(runCheck = true) {
     } catch (e) {
         console.error('Failed to refresh pending count:', e);
         if (countEl) countEl.textContent = '?';
-        if (hint) hint.textContent = '检测失败，请重试';
+        if (hint) hint.textContent = tMsg('msg_detection_failed');
         return 0;
     } finally {
         if (refreshBtn) {
             refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 查询';
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + tMsg('query');
         }
     }
 };
@@ -1454,7 +1469,7 @@ window.onDbNameChange = async function() {
     
     if (!dbName) {
         if (countEl) countEl.textContent = '-';
-        if (hint) hint.textContent = '请填写数据库名';
+        if (hint) hint.textContent = tMsg('msg_enter_db_name');
         return;
     }
     
@@ -1472,9 +1487,9 @@ window.onDbNameChange = async function() {
         if (hint) {
             if (count > 0) {
                 const batches = Math.ceil(count / batchSize);
-                hint.innerHTML = `<strong>${dbName}</strong>: ${count.toLocaleString()} 条，分 ${batches} 批`;
+                hint.innerHTML = `<strong>${dbName}</strong>: ` + tMsg('msg_queue_info', count.toLocaleString(), batches);
             } else {
-                hint.innerHTML = `<strong>${dbName}</strong>: 队列为空，点击查询检测`;
+                hint.innerHTML = `<strong>${dbName}</strong>: ` + tMsg('msg_click_query');
             }
         }
         
@@ -1528,12 +1543,12 @@ window.startAutoClassify = async function(resume = false) {
                     autoClassifyEventSource = null;
                     
                     if (data.status === 'completed') {
-                        showToast('自动分类完成！', 'success');
+                        showToast(tMsg('msg_auto_classify_complete'), 'success');
                         window.refreshCandidateCount();
                     } else if (data.status === 'paused') {
-                        showToast('自动分类已暂停，可点击"继续上次"恢复', 'success');
+                        showToast(tMsg('msg_auto_classify_paused'), 'success');
                     } else {
-                        showToast('自动分类出错: ' + data.message, 'error');
+                        showToast(tMsg('msg_auto_classify_error') + ': ' + data.message, 'error');
                     }
                 }
             } catch (e) {
@@ -1558,16 +1573,16 @@ window.startAutoClassify = async function(resume = false) {
         const result = await resp.json();
         
         if (result.success) {
-            showToast(`自动分类已启动，共 ${result.count} 个天体`, 'success');
+            showToast(tMsg('msg_auto_classify_started', result.count), 'success');
         } else {
-            showToast('启动失败: ' + result.error, 'error');
+            showToast(tMsg('msg_auto_classify_start_failed') + ': ' + result.error, 'error');
             if (autoClassifyEventSource) {
                 autoClassifyEventSource.close();
                 autoClassifyEventSource = null;
             }
         }
     } catch (e) {
-        showToast('启动自动分类失败: ' + e.message, 'error');
+        showToast(tMsg('msg_auto_classify_start_failed') + ': ' + e.message, 'error');
     }
 };
 
@@ -1590,9 +1605,9 @@ window.stopAutoClassify = async function() {
         const result = await resp.json();
         
         if (result.success) {
-            showToast('自动分类已停止', 'success');
+            showToast(tMsg('msg_auto_classify_stopped'), 'success');
             const progressText = document.getElementById('autoClassifyProgressText');
-            if (progressText) progressText.textContent = '已停止';
+            if (progressText) progressText.textContent = tMsg('msg_auto_classify_stopped');
             
             // 隐藏进度卡片
             setTimeout(() => {
@@ -1600,10 +1615,10 @@ window.stopAutoClassify = async function() {
                 if (card) card.style.display = 'none';
             }, 1000);
         } else {
-            showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+            showToast(tMsg('msg_stop_failed') + ': ' + (result.error || ''), 'error');
         }
     } catch (e) {
-        showToast('停止失败: ' + e.message, 'error');
+        showToast(tMsg('msg_stop_failed') + ': ' + e.message, 'error');
     } finally {
         // 恢复按钮
         if (stopBtn) {

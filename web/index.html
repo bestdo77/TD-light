@@ -3,7 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TD-light 光变曲线分类系统 (v2.0 Terminal)</title>
+    <title>TD-light 光变曲线分类系统</title>
+    <script>
+        // 语言切换功能 - 直接内嵌，不依赖外部文件
+        (function() {
+            const i18n = {
+                zh: {
+                    title: 'TD-light 光变曲线分类系统', mode: 'Stepper Mode',
+                    nav_portal: '天体分类', nav_import: '数据导入', nav_settings: '系统设置',
+                    cone_search: '锥形搜索', center_ra: '中心 RA (度)', center_dec: '中心 DEC (度)', search_radius: '搜索半径 (度)', search: '搜索', append: '追加',
+                    id_search: 'ID 检索', source_id_input: 'Source ID (支持多个，每行一个)', retrieve: '检索',
+                    rect_search: '矩形检索', ra_min: 'RA 最小值 (度)', ra_max: 'RA 最大值 (度)', dec_min: 'DEC 最小值 (度)', dec_max: 'DEC 最大值 (度)',
+                    objects_to_classify: '待分类天体', select_all: '全选', deselect_all: '取消全选', empty_list_hint: '使用上方搜索功能查找天体', start_classify: '开始分类',
+                    toggle_2d_3d: '切换 2D/3D', sky_map_hint: '搜索区域后显示天图',
+                    light_curve: '光变曲线', click_to_view: '点击天体查看光变曲线',
+                    classify_progress: '分类进度', step_extract: '提取数据', step_feature: '提取特征', step_predict: '分类预测', preparing: '准备中...', stop_classify: '停止分类',
+                    classify_results: '分类结果', coordinates: '坐标 (RA, DEC)', classification: '分类', confidence: '置信度', show_results_hint: '完成分类后显示结果',
+                    object_info: '天体信息', source_id: 'Source ID', healpix_id: 'Healpix ID', object_class: '类别', data_points: '数据点数',
+                    common_config: '公共配置', sync_config: '同步配置', coords_path_label: '坐标文件路径 (source_coordinates.csv)', database_name: '数据库名', healpix_nside: 'HEALPix NSIDE',
+                    db_management: '数据库管理', db_management_hint: '删除现有数据库以释放 VGroups 资源（重新导入前需要先删除）', select_database: '选择数据库', click_refresh: '-- 点击刷新列表 --', delete: '删除',
+                    catalog_import: '星表导入', catalog_import_hint: '从 CSV 导入星表元数据，自动根据 ra/dec 计算 HEALPix ID', catalog_path: '星表目录路径', start_import: '开始导入',
+                    lightcurve_import: '光变曲线导入', lightcurve_import_hint: '从 CSV 导入光变曲线时序数据', lightcurve_path: '光变曲线目录路径',
+                    import_progress: '导入进度', stop: '停止', step_create_tables: '建表', step_insert: '插入', step_complete: '完成',
+                    auto_classify: '自动分类', query: '查询', pending_classify: '待分类', auto_classify_hint: '检测新增或增长>20%的光变曲线', start: '开始', resume: '继续', auto_classify_progress: '自动分类进度',
+                    usage_instructions: '使用说明', usage_catalog: '星表导入：每个 CSV 文件包含一个 HEALPix 区域的星表，文件名格式为', usage_lightcurve: '光变曲线导入：每个 CSV 文件包含一个天体的光变曲线，文件名格式为', usage_auto: '自动分类：导入时自动检测新出现或数据点增长超过20%的光变曲线，加入分类队列，每批5000条处理。', usage_note: '注意：导入是资源密集型操作，建议在服务器负载较低时进行。',
+                    db_config: '数据库配置', host_address: '主机地址', port: '端口', username: '用户名',
+                    import_config: '导入配置', threads: '线程数', vgroups: 'VGroups 数', threads_hint: '建议: 低配 8-16, 高配 32-64', vgroups_hint: '建议: 低配 16-32, 高配 64-128',
+                    classify_config: '分类配置', confidence_threshold: '置信度阈值', model_path: '模型路径',
+                    save_config: '保存配置', reload_config: '重新加载', apply_to_backend: '应用到后端',
+                    msg_searching: '正在搜索...', msg_found_objects: '找到 {0} 个天体', msg_appended_objects: '追加了 {0} 个天体', msg_all_in_list: '所有天体已在列表中', msg_no_objects_found: '该区域未找到天体', msg_search_failed: '搜索失败',
+                    msg_retrieving: '正在检索 {0} 个ID...', msg_not_found: '未找到任何天体', msg_retrieve_failed: '检索失败', msg_list_cleared: '已清空列表', msg_select_objects: '请先选择要分类的天体', msg_classify_success: '成功分类 {0} 个天体！', msg_classify_stopped: '分类已停止',
+                    msg_config_loaded: '配置加载成功', msg_config_load_failed: '加载配置失败', msg_config_saved: '配置已保存！重启服务后生效。', msg_config_save_failed: '保存失败', msg_config_synced: '配置已同步', msg_config_sync_failed: '同步配置失败', msg_config_applied: '配置已保存并应用到后端！', msg_apply_failed: '应用失败',
+                    msg_import_started: '导入任务已启动', msg_import_start_failed: '启动导入失败', msg_import_complete: '导入完成!', msg_import_stopped: '导入已停止', msg_stop_failed: '停止失败',
+                    msg_db_refreshed: '已刷新，共 {0} 个用户数据库', msg_no_user_db: '没有用户数据库', msg_refresh_failed: '刷新失败', msg_select_db_delete: '请先选择要删除的数据库', msg_confirm_delete: '确定要删除数据库 "{0}" 吗？\n\n此操作不可恢复！', msg_db_deleted: '数据库 {0} 已删除', msg_delete_failed: '删除失败',
+                    msg_detection_querying: '正在查询数据库...', msg_detection_failed: '检测失败', msg_queue_empty: '队列为空', msg_queue_info: '{0} 条，分 {1} 批', msg_click_query: '队列为空，点击查询检测',
+                    msg_auto_classify_started: '自动分类已启动，共 {0} 个天体', msg_auto_classify_start_failed: '启动失败', msg_auto_classify_complete: '自动分类完成！', msg_auto_classify_paused: '自动分类已暂停，可点击"继续"恢复', msg_auto_classify_error: '自动分类出错', msg_auto_classify_stopped: '自动分类已停止',
+                    msg_enter_valid_coords: '请输入有效的 RA, DEC 和半径', msg_enter_source_id: '请输入 Source ID', msg_enter_valid_id: '请输入有效的 Source ID', msg_enter_valid_range: '请输入有效的坐标范围', msg_min_less_max: '最小值必须小于最大值',
+                    msg_enter_catalog_path: '请输入星表目录路径', msg_enter_coords_path: '请输入坐标文件路径', msg_enter_lc_path: '请输入光变曲线目录路径', msg_no_lc_data: '未找到光变曲线数据', msg_get_lc_failed: '获取光变曲线失败', msg_list_empty: '列表为空', msg_no_lc_data_download: '没有光变曲线数据', msg_object_not_found: '未找到天体信息', msg_enter_db_name: '请填写数据库名',
+                    msg_auto_detect_hint: '检测到 {0} 个天体待分类', msg_auto_starting: '正在自动开始分类...',
+                    auto_classify_after_import: '导入后自动分类', auto_classify_after_import_hint: '导入完成后自动检测并分类新数据'
+                },
+                en: {
+                    title: 'TD-light Light Curve Classification', mode: 'Stepper Mode',
+                    nav_portal: 'Classification', nav_import: 'Data Import', nav_settings: 'Settings',
+                    cone_search: 'Cone Search', center_ra: 'Center RA (deg)', center_dec: 'Center DEC (deg)', search_radius: 'Search Radius (deg)', search: 'Search', append: 'Append',
+                    id_search: 'ID Search', source_id_input: 'Source ID (one per line)', retrieve: 'Retrieve',
+                    rect_search: 'Region Search', ra_min: 'RA Min (deg)', ra_max: 'RA Max (deg)', dec_min: 'DEC Min (deg)', dec_max: 'DEC Max (deg)',
+                    objects_to_classify: 'Objects to Classify', select_all: 'Select All', deselect_all: 'Deselect All', empty_list_hint: 'Use search above to find objects', start_classify: 'Start Classification',
+                    toggle_2d_3d: 'Toggle 2D/3D', sky_map_hint: 'Search to display sky map',
+                    light_curve: 'Light Curve', click_to_view: 'Click object to view light curve',
+                    classify_progress: 'Classification Progress', step_extract: 'Extract Data', step_feature: 'Extract Features', step_predict: 'Classify', preparing: 'Preparing...', stop_classify: 'Stop',
+                    classify_results: 'Classification Results', coordinates: 'Coordinates (RA, DEC)', classification: 'Class', confidence: 'Confidence', show_results_hint: 'Results shown after classification',
+                    object_info: 'Object Info', source_id: 'Source ID', healpix_id: 'Healpix ID', object_class: 'Class', data_points: 'Data Points',
+                    common_config: 'Common Settings', sync_config: 'Sync Config', coords_path_label: 'Coordinates File Path (source_coordinates.csv)', database_name: 'Database Name', healpix_nside: 'HEALPix NSIDE',
+                    db_management: 'Database Management', db_management_hint: 'Delete existing databases to free VGroups resources', select_database: 'Select Database', click_refresh: '-- Click to Refresh --', delete: 'Delete',
+                    catalog_import: 'Catalog Import', catalog_import_hint: 'Import catalog metadata from CSV, auto-compute HEALPix ID from ra/dec', catalog_path: 'Catalog Directory Path', start_import: 'Start Import',
+                    lightcurve_import: 'Light Curve Import', lightcurve_import_hint: 'Import light curve time-series data from CSV', lightcurve_path: 'Light Curve Directory Path',
+                    import_progress: 'Import Progress', stop: 'Stop', step_create_tables: 'Tables', step_insert: 'Insert', step_complete: 'Done',
+                    auto_classify: 'Auto Classification', query: 'Query', pending_classify: 'Pending', auto_classify_hint: 'Detect new or >20% grown light curves', start: 'Start', resume: 'Resume', auto_classify_progress: 'Auto Classification Progress',
+                    usage_instructions: 'Usage Guide', usage_catalog: 'Catalog Import: Each CSV contains one HEALPix region catalog, filename format:', usage_lightcurve: 'Light Curve Import: Each CSV contains one object\'s light curve, filename format:', usage_auto: 'Auto Classification: Automatically detects new or >20% grown light curves after import, processes in batches of 5000.', usage_note: 'Note: Import is resource-intensive. Run during low server load.',
+                    db_config: 'Database Configuration', host_address: 'Host Address', port: 'Port', username: 'Username',
+                    import_config: 'Import Configuration', threads: 'Threads', vgroups: 'VGroups', threads_hint: 'Suggested: Low 8-16, High 32-64', vgroups_hint: 'Suggested: Low 16-32, High 64-128',
+                    classify_config: 'Classification Configuration', confidence_threshold: 'Confidence Threshold', model_path: 'Model Path',
+                    save_config: 'Save Config', reload_config: 'Reload', apply_to_backend: 'Apply to Backend',
+                    msg_searching: 'Searching...', msg_found_objects: 'Found {0} objects', msg_appended_objects: 'Appended {0} objects', msg_all_in_list: 'All objects already in list', msg_no_objects_found: 'No objects found in this region', msg_search_failed: 'Search failed',
+                    msg_retrieving: 'Retrieving {0} IDs...', msg_not_found: 'No objects found', msg_retrieve_failed: 'Retrieve failed', msg_list_cleared: 'List cleared', msg_select_objects: 'Please select objects to classify', msg_classify_success: 'Successfully classified {0} objects!', msg_classify_stopped: 'Classification stopped',
+                    msg_config_loaded: 'Config loaded', msg_config_load_failed: 'Failed to load config', msg_config_saved: 'Config saved! Restart required.', msg_config_save_failed: 'Save failed', msg_config_synced: 'Config synced', msg_config_sync_failed: 'Sync failed', msg_config_applied: 'Config saved and applied!', msg_apply_failed: 'Apply failed',
+                    msg_import_started: 'Import task started', msg_import_start_failed: 'Failed to start import', msg_import_complete: 'Import complete!', msg_import_stopped: 'Import stopped', msg_stop_failed: 'Stop failed',
+                    msg_db_refreshed: 'Refreshed: {0} user databases', msg_no_user_db: 'No user databases', msg_refresh_failed: 'Refresh failed', msg_select_db_delete: 'Please select a database to delete', msg_confirm_delete: 'Delete database "{0}"?\n\nThis cannot be undone!', msg_db_deleted: 'Database {0} deleted', msg_delete_failed: 'Delete failed',
+                    msg_detection_querying: 'Querying database...', msg_detection_failed: 'Detection failed', msg_queue_empty: 'Queue empty', msg_queue_info: '{0} items, {1} batches', msg_click_query: 'Queue empty, click Query to detect',
+                    msg_auto_classify_started: 'Auto-classification started: {0} objects', msg_auto_classify_start_failed: 'Failed to start', msg_auto_classify_complete: 'Auto-classification complete!', msg_auto_classify_paused: 'Paused. Click Resume to continue.', msg_auto_classify_error: 'Auto-classification error', msg_auto_classify_stopped: 'Auto-classification stopped',
+                    msg_enter_valid_coords: 'Enter valid RA, DEC and radius', msg_enter_source_id: 'Enter Source ID', msg_enter_valid_id: 'Enter valid Source ID', msg_enter_valid_range: 'Enter valid coordinate range', msg_min_less_max: 'Min must be less than Max',
+                    msg_enter_catalog_path: 'Enter catalog directory path', msg_enter_coords_path: 'Enter coordinates file path', msg_enter_lc_path: 'Enter light curve directory path', msg_no_lc_data: 'No light curve data found', msg_get_lc_failed: 'Failed to get light curve', msg_list_empty: 'List is empty', msg_no_lc_data_download: 'No light curve data', msg_object_not_found: 'Object not found', msg_enter_db_name: 'Enter database name',
+                    msg_auto_detect_hint: 'Detected {0} objects for classification', msg_auto_starting: 'Auto-starting classification...',
+                    auto_classify_after_import: 'Auto-classify after import', auto_classify_after_import_hint: 'Automatically detect and classify new data after import'
+                }
+            };
+            
+            let currentLang = localStorage.getItem('tdlight_lang') || 'zh';
+            
+            function t(key, ...args) {
+                let text = i18n[currentLang][key] || i18n['zh'][key] || key;
+                args.forEach((arg, i) => { text = text.replace(`{${i}}`, arg); });
+                return text;
+            }
+            
+            function updatePageLanguage() {
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const key = el.getAttribute('data-i18n');
+                    const translation = t(key);
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        el.placeholder = translation;
+                    } else if (el.tagName === 'OPTION') {
+                        el.textContent = translation;
+                    } else {
+                        const hasChildren = el.children.length > 0;
+                        if (hasChildren) {
+                            const textNodes = Array.from(el.childNodes).filter(n => n.nodeType === Node.TEXT_NODE);
+                            if (textNodes.length > 0) textNodes[0].textContent = translation;
+                            else el.insertBefore(document.createTextNode(translation), el.firstChild);
+                        } else {
+                            el.textContent = translation;
+                        }
+                    }
+                });
+                document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.getAttribute('data-i18n-title')));
+                document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.placeholder = t(el.getAttribute('data-i18n-placeholder')));
+                document.title = t('title');
+                const langText = document.getElementById('langText');
+                if (langText) langText.textContent = currentLang === 'zh' ? 'EN' : '中文';
+                document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+            }
+            
+            window.toggleLanguage = function() {
+                currentLang = currentLang === 'zh' ? 'en' : 'zh';
+                localStorage.setItem('tdlight_lang', currentLang);
+                updatePageLanguage();
+            };
+            
+            window.t = t;
+            window.i18n = i18n;
+            window.updatePageLanguage = updatePageLanguage;
+            
+            // 初始化
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    updatePageLanguage();
+                    const btn = document.getElementById('langSwitcher');
+                    if (btn) btn.onclick = window.toggleLanguage;
+                });
+            } else {
+                updatePageLanguage();
+                const btn = document.getElementById('langSwitcher');
+                if (btn) btn.onclick = window.toggleLanguage;
+            }
+        })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
@@ -629,6 +764,13 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #d1d5db;
         }
+        
+        /* Language switcher button */
+        #langSwitcher:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -638,13 +780,17 @@
             <div class="logo-icon"><i class="fas fa-star"></i></div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 TD-light 
-                <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.1); color: var(--accent); padding: 2px 8px; border-radius: 12px; font-weight: normal; border: 1px solid rgba(59, 130, 246, 0.2);">Stepper Mode</span>
+                <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.1); color: var(--accent); padding: 2px 8px; border-radius: 12px; font-weight: normal; border: 1px solid rgba(59, 130, 246, 0.2);" data-i18n="mode">Stepper Mode</span>
             </div>
         </div>
         <div class="nav-tabs">
-            <div class="nav-tab active" id="nav-portal" onclick="window.switchTab('portal')">天体分类</div>
-            <div class="nav-tab" id="nav-import" onclick="window.switchTab('import')">数据导入</div>
-            <div class="nav-tab" id="nav-settings" onclick="window.switchTab('settings')">系统设置</div>
+            <div class="nav-tab active" id="nav-portal" onclick="window.switchTab('portal')" data-i18n="nav_portal">天体分类</div>
+            <div class="nav-tab" id="nav-import" onclick="window.switchTab('import')" data-i18n="nav_import">数据导入</div>
+            <div class="nav-tab" id="nav-settings" onclick="window.switchTab('settings')" data-i18n="nav_settings">系统设置</div>
+            <button id="langSwitcher" onclick="window.toggleLanguage()" style="margin-left: 16px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                <i class="fas fa-globe"></i>
+                <span id="langText">EN</span>
+            </button>
         </div>
         </div>
         
@@ -659,29 +805,29 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-search"></i></div>
-                                <span>锥形搜索</span>
+                                <span data-i18n="cone_search">锥形搜索</span>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">中心 RA (度)</label>
+                                <label class="form-label" data-i18n="center_ra">中心 RA (度)</label>
                                 <input type="number" class="form-input" id="centerRa" value="180" step="0.001">
                     </div>
                             <div class="form-group">
-                                <label class="form-label">中心 DEC (度)</label>
+                                <label class="form-label" data-i18n="center_dec">中心 DEC (度)</label>
                                 <input type="number" class="form-input" id="centerDec" value="0" step="0.001">
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">搜索半径 (度)</label>
+                            <label class="form-label" data-i18n="search_radius">搜索半径 (度)</label>
                             <input type="number" class="form-input" id="radius" value="1.0" step="0.1" min="0.1" max="10">
                     </div>
                         <div class="btn-row">
                             <button class="btn btn-primary" onclick="window.performConeSearch(false);">
-                                <i class="fas fa-search"></i> 搜索
+                                <i class="fas fa-search"></i> <span data-i18n="search">搜索</span>
                             </button>
                             <button class="btn" onclick="window.performConeSearch(true);" style="background: #6366f1;">
-                                <i class="fas fa-plus"></i> 追加
+                                <i class="fas fa-plus"></i> <span data-i18n="append">追加</span>
                             </button>
                         </div>
                     </div>
@@ -691,19 +837,19 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-fingerprint"></i></div>
-                                <span>ID 检索</span>
+                                <span data-i18n="id_search">ID 检索</span>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Source ID (支持多个，每行一个)</label>
-                            <textarea class="form-input" id="searchSourceId" rows="3" placeholder="3602817205828729344&#10;3795050836667031936&#10;..." style="resize: vertical; font-family: 'Source Code Pro', monospace;"></textarea>
+                            <label class="form-label" data-i18n="source_id_input">Source ID (支持多个，每行一个)</label>
+                            <textarea class="form-input" id="searchSourceId" rows="3" data-i18n-placeholder="source_id_placeholder" placeholder="3602817205828729344&#10;3795050836667031936&#10;..." style="resize: vertical; font-family: 'Source Code Pro', monospace;"></textarea>
                         </div>
                         <div class="btn-row">
                             <button class="btn btn-primary" onclick="window.searchById(false);">
-                                <i class="fas fa-search"></i> 检索
+                                <i class="fas fa-search"></i> <span data-i18n="retrieve">检索</span>
                             </button>
                             <button class="btn" onclick="window.searchById(true);" style="background: #6366f1;">
-                                <i class="fas fa-plus"></i> 追加
+                                <i class="fas fa-plus"></i> <span data-i18n="append">追加</span>
                             </button>
                         </div>
                     </div>
@@ -713,35 +859,35 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-vector-square"></i></div>
-                                <span>矩形检索</span>
+                                <span data-i18n="rect_search">矩形检索</span>
                             </div>
                             </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">RA 最小值 (度)</label>
+                                <label class="form-label" data-i18n="ra_min">RA 最小值 (度)</label>
                                 <input type="number" class="form-input" id="raMin" value="179" step="0.001">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">RA 最大值 (度)</label>
+                                <label class="form-label" data-i18n="ra_max">RA 最大值 (度)</label>
                                 <input type="number" class="form-input" id="raMax" value="181" step="0.001">
                             </div>
                             </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">DEC 最小值 (度)</label>
+                                <label class="form-label" data-i18n="dec_min">DEC 最小值 (度)</label>
                                 <input type="number" class="form-input" id="decMin" value="-1" step="0.001">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">DEC 最大值 (度)</label>
+                                <label class="form-label" data-i18n="dec_max">DEC 最大值 (度)</label>
                                 <input type="number" class="form-input" id="decMax" value="1" step="0.001">
                             </div>
                         </div>
                         <div class="btn-row">
                             <button class="btn btn-primary" onclick="window.performRectSearch(false);">
-                                <i class="fas fa-search"></i> 搜索
+                                <i class="fas fa-search"></i> <span data-i18n="search">搜索</span>
                             </button>
                             <button class="btn" onclick="window.performRectSearch(true);" style="background: #6366f1;">
-                                <i class="fas fa-plus"></i> 追加
+                                <i class="fas fa-plus"></i> <span data-i18n="append">追加</span>
                             </button>
                         </div>
                     </div>
@@ -751,7 +897,7 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-list"></i></div>
-                                <span>待分类天体</span>
+                                <span data-i18n="objects_to_classify">待分类天体</span>
                                 </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span class="count-badge" id="selectedCount">0</span>
@@ -765,21 +911,21 @@
                         </div>
                         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                             <button onclick="window.selectAllObjects(true);" style="flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
-                                <i class="fas fa-check-double"></i> 全选
+                                <i class="fas fa-check-double"></i> <span data-i18n="select_all">全选</span>
                             </button>
                             <button onclick="window.selectAllObjects(false);" style="flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
-                                <i class="fas fa-square"></i> 取消全选
+                                <i class="fas fa-square"></i> <span data-i18n="deselect_all">取消全选</span>
                             </button>
                         </div>
                         <div class="object-list" id="objectList">
                             <div class="empty-state">
                                 <div class="empty-state-icon"><i class="fas fa-search"></i></div>
-                                <div>使用上方搜索功能查找天体</div>
+                                <div data-i18n="empty_list_hint">使用上方搜索功能查找天体</div>
                             </div>
                         </div>
                         <div style="margin-top: 20px;">
                             <button class="btn btn-success" id="classifyBtn" onclick="window.classifySelectedObjects();" disabled>
-                                <i class="fas fa-play"></i> 开始分类
+                                <i class="fas fa-play"></i> <span data-i18n="start_classify">开始分类</span>
                             </button>
                         </div>
                         </div>
@@ -792,12 +938,12 @@
                         <div class="sky-map-container" id="skyMapContainer">
                             <div class="map-controls">
                                 <button class="map-btn" onclick="window.toggleSkyMapMode();">
-                                    <i class="fas fa-sync-alt"></i> 切换 2D/3D
+                                    <i class="fas fa-sync-alt"></i> <span data-i18n="toggle_2d_3d">切换 2D/3D</span>
                                 </button>
                             </div>
                             <div class="sky-map-placeholder" id="skyMapPlaceholder">
                                 <i class="fas fa-globe"></i>
-                                <div>搜索区域后显示天图</div>
+                                <div data-i18n="sky_map_hint">搜索区域后显示天图</div>
                         </div>
                             <div id="skyMap3D" style="width: 100%; height: 100%;"></div>
                             <canvas id="skyMapCanvas" style="display: none; width: 100%; height: 100%;"></canvas>
@@ -809,7 +955,7 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-chart-line"></i></div>
-                                <span>光变曲线</span>
+                                <span data-i18n="light_curve">光变曲线</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <div id="objectInfo" style="color: var(--text-secondary); font-size: 0.95rem;"></div>
@@ -822,7 +968,7 @@
                             <canvas id="lightcurveChart" style="display: none; width: 100%; height: 100%;"></canvas>
                             <div class="chart-placeholder" id="chartPlaceholder">
                                 <i class="fas fa-chart-line"></i>
-                                <div>点击天体查看光变曲线</div>
+                                <div data-i18n="click_to_view">点击天体查看光变曲线</div>
                             </div>
                         </div>
                     </div>
@@ -832,31 +978,31 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-tasks"></i></div>
-                                <span>分类进度</span>
+                                <span data-i18n="classify_progress">分类进度</span>
                             </div>
                         </div>
                         <div class="steps" style="display: flex; justify-content: space-between; margin-bottom: 20px; position: relative;">
                             <div style="position: absolute; top: 18px; left: 60px; right: 60px; height: 2px; background: var(--border); z-index: 0;"></div>
                             <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                                 <div class="step-circle" id="step1" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-database"></i></div>
-                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">提取数据</div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);" data-i18n="step_extract">提取数据</div>
                             </div>
                             <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                                 <div class="step-circle" id="step2" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-cog"></i></div>
-                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">提取特征</div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);" data-i18n="step_feature">提取特征</div>
                             </div>
                             <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                                 <div class="step-circle" id="step3" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;"><i class="fas fa-chart-bar"></i></div>
-                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">分类预测</div>
+                                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);" data-i18n="step_predict">分类预测</div>
                             </div>
                         </div>
                         <div style="background: var(--border); border-radius: 6px; height: 8px; overflow: hidden;">
                             <div class="progress-bar" id="progressBar" style="height: 100%; background: var(--accent); border-radius: 6px; width: 0%; transition: width 0.3s;"></div>
                         </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-                            <div id="progressText" style="color: var(--text-secondary); font-size: 0.95rem;">准备中...</div>
+                            <div id="progressText" style="color: var(--text-secondary); font-size: 0.95rem;" data-i18n="preparing">准备中...</div>
                             <button id="stopBtnRight" class="btn btn-danger" onclick="window.stopClassification();" style="padding: 8px 16px; width: auto;">
-                                <i class="fas fa-stop"></i> 停止分类
+                                <i class="fas fa-stop"></i> <span data-i18n="stop_classify">停止分类</span>
                             </button>
                         </div>
                     </div>
@@ -866,21 +1012,21 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-table"></i></div>
-                                <span>分类结果</span>
+                                <span data-i18n="classify_results">分类结果</span>
                             </div>
                         </div>
                         <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
                             <table class="results-table">
                                 <thead>
                                     <tr>
-                                        <th>Source ID</th>
-                                        <th>坐标 (RA, DEC)</th>
-                                        <th>分类</th>
-                                        <th>置信度</th>
+                                        <th data-i18n="source_id">Source ID</th>
+                                        <th data-i18n="coordinates">坐标 (RA, DEC)</th>
+                                        <th data-i18n="classification">分类</th>
+                                        <th data-i18n="confidence">置信度</th>
                                     </tr>
                                 </thead>
                                 <tbody id="resultsBody">
-                                    <tr><td colspan="4" style="text-align: center; padding: 48px; color: var(--text-secondary);">完成分类后显示结果</td></tr>
+                                    <tr><td colspan="4" style="text-align: center; padding: 48px; color: var(--text-secondary);" data-i18n="show_results_hint">完成分类后显示结果</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -891,16 +1037,16 @@
                         <div class="card-header">
                             <div class="card-header-title">
                                 <div class="card-icon"><i class="fas fa-info-circle"></i></div>
-                                <span>天体信息</span>
+                                <span data-i18n="object_info">天体信息</span>
                     </div>
                         </div>
                         <div class="meta-grid">
                             <div class="meta-item">
-                                <div class="meta-label">Source ID</div>
+                                <div class="meta-label" data-i18n="source_id">Source ID</div>
                                 <div class="meta-value" id="metaSourceId">-</div>
                             </div>
                             <div class="meta-item">
-                                <div class="meta-label">Healpix ID</div>
+                                <div class="meta-label" data-i18n="healpix_id">Healpix ID</div>
                                 <div class="meta-value" id="metaHealpixId">-</div>
                             </div>
                             <div class="meta-item">
@@ -912,11 +1058,11 @@
                                 <div class="meta-value" id="metaDec">-</div>
                             </div>
                             <div class="meta-item">
-                                <div class="meta-label">类别</div>
+                                <div class="meta-label" data-i18n="object_class">类别</div>
                                 <div class="meta-value" id="metaClass">-</div>
                             </div>
                             <div class="meta-item">
-                                <div class="meta-label">数据点数</div>
+                                <div class="meta-label" data-i18n="data_points">数据点数</div>
                                 <div class="meta-value" id="metaCount">-</div>
                             </div>
                         </div>
@@ -933,23 +1079,23 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-cog"></i></div>
-                            <span>公共配置</span>
+                            <span data-i18n="common_config">公共配置</span>
                         </div>
                         <button class="btn btn-outline btn-sm" onclick="window.syncConfigFromFile();" title="从 config.json 重新加载配置">
-                            <i class="fas fa-sync-alt"></i> 同步配置
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="sync_config">同步配置</span>
                         </button>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">坐标文件路径 (source_coordinates.csv)</label>
+                        <label class="form-label" data-i18n="coords_path_label">坐标文件路径 (source_coordinates.csv)</label>
                         <input type="text" class="form-input" id="coordsPath" placeholder="/app/data/catalogs_gaiadr2/source_coordinates.csv">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">数据库名</label>
+                            <label class="form-label" data-i18n="database_name">数据库名</label>
                             <input type="text" class="form-input" id="importDbName" value="gaiadr2_lc" onchange="window.onDbNameChange();">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">HEALPix NSIDE</label>
+                            <label class="form-label" data-i18n="healpix_nside">HEALPix NSIDE</label>
                             <input type="number" class="form-input" id="importNside" value="64" min="1" max="512">
                         </div>
                     </div>
@@ -960,17 +1106,17 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-database"></i></div>
-                            <span>数据库管理</span>
+                            <span data-i18n="db_management">数据库管理</span>
                         </div>
                     </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;" data-i18n="db_management_hint">
                         删除现有数据库以释放 VGroups 资源（重新导入前需要先删除）
                     </p>
                     <div class="form-row">
                         <div class="form-group" style="flex: 1;">
-                            <label class="form-label">选择数据库</label>
+                            <label class="form-label" data-i18n="select_database">选择数据库</label>
                             <select id="dropDbSelect" class="form-input" style="padding: 10px;">
-                                <option value="">-- 点击刷新列表 --</option>
+                                <option value="" data-i18n="click_refresh">-- 点击刷新列表 --</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end; gap: 8px;">
@@ -978,7 +1124,7 @@
                                 <i class="fas fa-sync-alt"></i>
                             </button>
                             <button class="btn btn-danger" onclick="window.dropSelectedDatabase();" style="padding: 10px 16px;">
-                                <i class="fas fa-trash"></i> 删除
+                                <i class="fas fa-trash"></i> <span data-i18n="delete">删除</span>
                             </button>
                         </div>
                     </div>
@@ -989,19 +1135,19 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-table"></i></div>
-                            <span>星表导入</span>
+                            <span data-i18n="catalog_import">星表导入</span>
                         </div>
                     </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;" data-i18n="catalog_import_hint">
                         从 CSV 导入星表元数据，自动根据 ra/dec 计算 HEALPix ID
                     </p>
                     <div class="form-group">
-                        <label class="form-label">星表目录路径</label>
+                        <label class="form-label" data-i18n="catalog_path">星表目录路径</label>
                         <input type="text" class="form-input" id="catalogPath" placeholder="/app/data/catalogs_gaiadr2/catalogs/">
                     </div>
                     <div class="btn-row">
                         <button class="btn btn-primary" onclick="window.startCatalogImport();">
-                            <i class="fas fa-upload"></i> 开始导入
+                            <i class="fas fa-upload"></i> <span data-i18n="start_import">开始导入</span>
                         </button>
                     </div>
                 </div>
@@ -1011,19 +1157,19 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-chart-line"></i></div>
-                            <span>光变曲线导入</span>
+                            <span data-i18n="lightcurve_import">光变曲线导入</span>
                         </div>
                     </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;" data-i18n="lightcurve_import_hint">
                         从 CSV 导入光变曲线时序数据
                     </p>
                     <div class="form-group">
-                        <label class="form-label">光变曲线目录路径</label>
+                        <label class="form-label" data-i18n="lightcurve_path">光变曲线目录路径</label>
                         <input type="text" class="form-input" id="lightcurvePath" placeholder="/app/data/gaiadr2/">
                     </div>
                     <div class="btn-row">
                         <button class="btn btn-primary" onclick="window.startLightcurveImport();">
-                            <i class="fas fa-upload"></i> 开始导入
+                            <i class="fas fa-upload"></i> <span data-i18n="start_import">开始导入</span>
                         </button>
                     </div>
                 </div>
@@ -1033,10 +1179,10 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-tasks"></i></div>
-                            <span>导入进度</span>
+                            <span data-i18n="import_progress">导入进度</span>
                         </div>
                         <button class="btn btn-danger btn-sm" onclick="window.stopImport();">
-                            <i class="fas fa-stop"></i> 停止
+                            <i class="fas fa-stop"></i> <span data-i18n="stop">停止</span>
                         </button>
                     </div>
                     
@@ -1044,21 +1190,21 @@
                         <div style="position: absolute; top: 15px; left: 40px; right: 40px; height: 2px; background: var(--border); z-index: 0;"></div>
                         <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                             <div class="step-circle" id="importStep1" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-database"></i></div>
-                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">建表</div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);" data-i18n="step_create_tables">建表</div>
                         </div>
                         <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                             <div class="step-circle" id="importStep2" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-file-import"></i></div>
-                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">插入</div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);" data-i18n="step_insert">插入</div>
                         </div>
                         <div class="step" style="display: flex; flex-direction: column; align-items: center; z-index: 1;">
                             <div class="step-circle" id="importStep3" style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem;"><i class="fas fa-check"></i></div>
-                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);">完成</div>
+                            <div style="margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary);" data-i18n="step_complete">完成</div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                            <span id="importProgressText">准备中...</span>
+                            <span id="importProgressText" data-i18n="preparing">准备中...</span>
                             <span id="importProgressPercent">0%</span>
                         </div>
                         <div style="background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden;">
@@ -1075,33 +1221,40 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-robot"></i></div>
-                            <span>自动分类</span>
+                            <span data-i18n="auto_classify">自动分类</span>
                         </div>
                         <button class="btn btn-outline btn-sm" id="refreshPendingBtn" onclick="window.refreshPendingCount();">
-                            <i class="fas fa-sync-alt"></i> 查询
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="query">查询</span>
                         </button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; gap: 8px; background: var(--bg); padding: 8px 14px; border-radius: 6px;">
                             <span style="font-size: 1.2rem; font-weight: 700; color: var(--accent);" id="pendingClassifyCount">-</span>
-                            <span style="font-size: 0.8rem; color: var(--text-secondary);">待分类</span>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);" data-i18n="pending_classify">待分类</span>
                         </div>
-                        <div style="flex: 1; min-width: 150px; font-size: 0.8rem; color: var(--text-secondary);" id="pendingClassifyHint">
+                        <div style="flex: 1; min-width: 150px; font-size: 0.8rem; color: var(--text-secondary);" id="pendingClassifyHint" data-i18n="auto_classify_hint">
                             检测新增或增长&gt;20%的光变曲线
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <button class="btn btn-success btn-sm" id="startAutoClassifyBtn" onclick="window.startAutoClassify(false);" disabled>
-                                <i class="fas fa-play"></i> 开始
+                                <i class="fas fa-play"></i> <span data-i18n="start">开始</span>
                             </button>
                             <button class="btn btn-primary btn-sm" onclick="window.startAutoClassify(true);">
-                                <i class="fas fa-redo"></i> 继续
+                                <i class="fas fa-redo"></i> <span data-i18n="resume">继续</span>
                             </button>
                             <button class="btn btn-danger btn-sm" id="stopAutoClassifyBtn" onclick="window.stopAutoClassify();">
-                                <i class="fas fa-stop"></i> 停止
+                                <i class="fas fa-stop"></i> <span data-i18n="stop">停止</span>
                             </button>
                             <input type="number" class="form-input" id="autoClassifyBatchSize" value="5000" min="100" max="50000" 
                                    style="padding: 5px 8px; width: 70px; font-size: 0.8rem;" title="每批处理数量">
                         </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--accent-light); border-radius: 6px; border: 1px solid var(--accent);">
+                        <input type="checkbox" id="autoClassifyAfterImport" checked style="width: 18px; height: 18px; accent-color: var(--accent);">
+                        <label for="autoClassifyAfterImport" style="font-size: 0.9rem; cursor: pointer;">
+                            <span data-i18n="auto_classify_after_import">导入后自动分类</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 8px;" data-i18n="auto_classify_after_import_hint">导入完成后自动检测并分类新数据</span>
+                        </label>
                     </div>
                 </div>
 
@@ -1110,12 +1263,12 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-tasks"></i></div>
-                            <span>自动分类进度</span>
+                            <span data-i18n="auto_classify_progress">自动分类进度</span>
                         </div>
                     </div>
                     <div style="margin-bottom: 16px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span id="autoClassifyProgressText">准备中...</span>
+                            <span id="autoClassifyProgressText" data-i18n="preparing">准备中...</span>
                             <span id="autoClassifyProgressPercent">0%</span>
                         </div>
                         <div style="background: var(--bg); border-radius: 4px; height: 10px; overflow: hidden;">
@@ -1132,14 +1285,14 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-info-circle"></i></div>
-                            <span>使用说明</span>
+                            <span data-i18n="usage_instructions">使用说明</span>
                         </div>
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.8;">
-                        <p><strong>星表导入</strong>：每个 CSV 文件包含一个 HEALPix 区域的星表，文件名格式为 <code>healpix_*.csv</code></p>
-                        <p style="margin-top: 8px;"><strong>光变曲线导入</strong>：每个 CSV 文件包含一个天体的光变曲线，文件名格式为 <code>source_id.csv</code></p>
-                        <p style="margin-top: 8px;"><strong>自动分类</strong>：导入时自动检测新出现或数据点增长超过20%的光变曲线，加入分类队列，每批5000条处理。</p>
-                        <p style="margin-top: 8px;"><strong>注意</strong>：导入是资源密集型操作，建议在服务器负载较低时进行。</p>
+                        <p><strong data-i18n="catalog_import">星表导入</strong>：<span data-i18n="usage_catalog">每个 CSV 文件包含一个 HEALPix 区域的星表，文件名格式为</span> <code>healpix_*.csv</code></p>
+                        <p style="margin-top: 8px;"><strong data-i18n="lightcurve_import">光变曲线导入</strong>：<span data-i18n="usage_lightcurve">每个 CSV 文件包含一个天体的光变曲线，文件名格式为</span> <code>source_id.csv</code></p>
+                        <p style="margin-top: 8px;"><strong data-i18n="auto_classify">自动分类</strong>：<span data-i18n="usage_auto">导入时自动检测新出现或数据点增长超过20%的光变曲线，加入分类队列，每批5000条处理。</span></p>
+                        <p style="margin-top: 8px;"><strong>Note</strong>：<span data-i18n="usage_note">导入是资源密集型操作，建议在服务器负载较低时进行。</span></p>
                     </div>
                 </div>
             </div>
@@ -1152,12 +1305,12 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-database"></i></div>
-                            <span>数据库配置</span>
+                            <span data-i18n="db_config">数据库配置</span>
                         </div>
                             </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">数据库名称</label>
+                            <label class="form-label" data-i18n="database_name">数据库名称</label>
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" class="form-input" id="configDbName" placeholder="gaiadr2_lc">
                                 <select id="dbListSelect" class="form-input" style="width: 40px; padding: 0 8px;" onchange="document.getElementById('configDbName').value = this.value;">
@@ -1166,17 +1319,17 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">主机地址</label>
+                            <label class="form-label" data-i18n="host_address">主机地址</label>
                             <input type="text" class="form-input" id="configDbHost" placeholder="localhost">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">端口</label>
+                            <label class="form-label" data-i18n="port">端口</label>
                             <input type="number" class="form-input" id="configDbPort" placeholder="6041">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">用户名</label>
+                            <label class="form-label" data-i18n="username">用户名</label>
                             <input type="text" class="form-input" id="configDbUser" placeholder="root">
                         </div>
                     </div>
@@ -1186,19 +1339,19 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-upload"></i></div>
-                            <span>导入配置</span>
+                            <span data-i18n="import_config">导入配置</span>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">线程数</label>
+                            <label class="form-label" data-i18n="threads">线程数</label>
                             <input type="number" class="form-input" id="configThreads" value="16" min="1" max="128" placeholder="16">
-                            <small style="color: #888; font-size: 11px;">建议: 低配 8-16, 高配 32-64</small>
+                            <small style="color: #888; font-size: 11px;" data-i18n="threads_hint">建议: 低配 8-16, 高配 32-64</small>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">VGroups 数</label>
+                            <label class="form-label" data-i18n="vgroups">VGroups 数</label>
                             <input type="number" class="form-input" id="configVgroups" value="32" min="1" max="256" placeholder="32">
-                            <small style="color: #888; font-size: 11px;">建议: 低配 16-32, 高配 64-128</small>
+                            <small style="color: #888; font-size: 11px;" data-i18n="vgroups_hint">建议: 低配 16-32, 高配 64-128</small>
                         </div>
                     </div>
                 </div>
@@ -1207,16 +1360,16 @@
                     <div class="card-header">
                         <div class="card-header-title">
                             <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
-                            <span>分类配置</span>
+                            <span data-i18n="classify_config">分类配置</span>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">置信度阈值</label>
+                            <label class="form-label" data-i18n="confidence_threshold">置信度阈值</label>
                             <input type="number" class="form-input" id="configThreshold" step="0.01" min="0" max="1" placeholder="0.95">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">模型路径</label>
+                            <label class="form-label" data-i18n="model_path">模型路径</label>
                             <input type="text" class="form-input" id="configModelPath" placeholder="/path/to/model.pkl">
                         </div>
                     </div>
@@ -1224,19 +1377,19 @@
                 
                 <div class="btn-row">
                     <button class="btn btn-success" onclick="window.saveConfig();">
-                        <i class="fas fa-save"></i> 保存配置
+                        <i class="fas fa-save"></i> <span data-i18n="save_config">保存配置</span>
                     </button>
                     <button class="btn btn-primary" onclick="window.loadConfig();">
-                        <i class="fas fa-sync-alt"></i> 重新加载
+                        <i class="fas fa-sync-alt"></i> <span data-i18n="reload_config">重新加载</span>
                     </button>
                     <button class="btn btn-warning" onclick="window.reloadConfigBackend();">
-                        <i class="fas fa-redo"></i> 应用到后端
+                        <i class="fas fa-redo"></i> <span data-i18n="apply_to_backend">应用到后端</span>
                     </button>
                 </div>
             </div>
         </div>
     </div>
     
-    <script src="app.js?v=apply_v1"></script>
+    <script src="app.js?v=i18n_v3"></script>
 </body>
 </html>
