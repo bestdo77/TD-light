@@ -4,6 +4,8 @@
 web/web_api
 insert/catalog_importer
 insert/lightcurve_importer
+insert/check_candidates
+insert/crossmatch
 
 # Python
 __pycache__/
@@ -21,7 +23,8 @@ config/taos_cfg/taos.cfg
 
 # 数据和模型 (太大，自动下载)
 data/
-models/*.pkl
+models/**/*.pkl
+models/**/*.onnx
 
 # 第三方依赖 (自动下载)
 third_party/
