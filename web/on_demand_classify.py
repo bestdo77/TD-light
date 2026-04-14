@@ -34,10 +34,8 @@ PROGRESS_FILE = "/tmp/classify_progress.json"
 STOP_FILE = "/tmp/classify_stop"
 
 # Model Configuration
-# Note: Paths should ideally come from a config file, keeping hardcoded for compatibility with existing deployment
-MODEL_DIR = "../classifier"
-MODEL_PATH = os.path.join(MODEL_DIR, "lgbm_111w_model.pkl")
-METADATA_PATH = os.path.join(MODEL_DIR, "metadata.pkl")
+# Hierarchical model directory — 7 sub-models for 4-level classification
+MODEL_DIR = "../models/hierarchical_unlimited"
 
 SELECTED_FEATURES = [
     'PeriodLS', 'Mean', 'Rcs', 'Psi_eta', 'StetsonK_AC',
@@ -156,24 +154,19 @@ def run_classification():
         if not batch:
             return {"error": "No valid objects"}
 
-        # Load Model
-        update_progress(20, "Loading model...")
+        # Load Hierarchical Model
+        update_progress(20, "Loading hierarchical model...")
         
-        if not os.path.exists(MODEL_PATH):
-            return {"error": f"Model not found: {MODEL_PATH}"}
+        # Add parent dir to path for importing hierarchical_predictor
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'class'))
+        from hierarchical_predictor import load_hierarchical_predictor
         
-        model = joblib.load(MODEL_PATH)
+        if not os.path.isdir(MODEL_DIR):
+            return {"error": f"Model directory not found: {MODEL_DIR}"}
         
-        # Load metadata
-        if os.path.exists(METADATA_PATH):
-            with open(METADATA_PATH, 'rb') as f:
-                metadata = pickle.load(f)
-            class_map = metadata.get('class_map', {c: i for i, c in enumerate(ALL_CLASSES)})
-            idx_to_class = {v: k for k, v in class_map.items()}
-        else:
-            idx_to_class = {i: c for i, c in enumerate(ALL_CLASSES)}
+        predictor = load_hierarchical_predictor(MODEL_DIR, n_threads=4, prefer_onnx=True)
         
-        update_progress(25, "Model loaded")
+        update_progress(25, f"Model loaded (backend={predictor.backend})")
         
         # Feature Extraction & Classification
         fs = feets.FeatureSpace(data=['time', 'magnitude', 'error'], only=SELECTED_FEATURES)
@@ -224,12 +217,10 @@ def run_classification():
             if feats is None:
                 continue
             
-            feats_arr = np.array(feats).reshape(1, -1)
-            probs = model.predict_proba(feats_arr)[0]
-            max_idx = np.argmax(probs)
-            pred_idx = model.classes_[max_idx] if hasattr(model, 'classes_') else max_idx
-            pred_class = idx_to_class.get(pred_idx, str(pred_idx))
-            confidence = probs[max_idx]
+            feats_arr = np.array(feats, dtype=np.float32).reshape(1, -1)
+            labels, confs = predictor.predict(feats_arr)
+            pred_class = labels[0]
+            confidence = confs[0]
             
             results.append({
                 "source_id": str(source_id),
@@ -257,7 +248,7 @@ def run_classification():
         return {
             "results": results, 
             "count": len(results),
-            "model": "lgbm_111w_15features_tuned",
+            "model": "hierarchical_lgbm_unlimited",
             "saved_to": result_file
         }
 

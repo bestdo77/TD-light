@@ -25,7 +25,12 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
+// TDlight modular headers (shared utilities)
+#include <tdlight/sanitize.h>
+#include <tdlight/http_utils.h>
+
 using namespace std;
+using namespace tdlight;  // Import sanitize/http helpers
 
 const string CONFIG_FILE = "../config.json";
 
@@ -39,8 +44,7 @@ struct Config {
     int web_port = 5001;
     string web_host = "0.0.0.0";
     
-    string model_path = "../models/lgbm_111w_model.pkl";
-    string metadata_path = "../models/metadata.pkl";
+    string model_dir = "../models/hierarchical_unlimited";
     double confidence_threshold = 0.95;
     bool update_database = true;
     
@@ -134,8 +138,8 @@ bool load_config() {
     config.db_name = json_get_string(json, "name");
     if (config.db_name.empty()) config.db_name = "gaiadr2_lc";
     
-    config.model_path = json_get_string(json, "model_path");
-    config.metadata_path = json_get_string(json, "metadata_path");
+    string md = json_get_string(json, "model_dir");
+    if (!md.empty()) config.model_dir = md;
     config.confidence_threshold = json_get_double(json, "confidence_threshold", 0.95);
     config.update_database = json_get_bool(json, "update_database", true);
     
@@ -185,8 +189,7 @@ bool save_config() {
     file << "        \"host\": \"" << config.web_host << "\"\n";
     file << "    },\n";
     file << "    \"classification\": {\n";
-    file << "        \"model_path\": \"" << config.model_path << "\",\n";
-    file << "        \"metadata_path\": \"" << config.metadata_path << "\",\n";
+    file << "        \"model_dir\": \"" << config.model_dir << "\",\n";
     file << "        \"confidence_threshold\": " << config.confidence_threshold << ",\n";
     file << "        \"update_database\": " << (config.update_database ? "true" : "false") << "\n";
     file << "    },\n";
@@ -220,7 +223,7 @@ string config_to_json() {
     ss << "\"port\":" << config.web_port;
     ss << "},";
     ss << "\"classification\":{";
-    ss << "\"model_path\":\"" << config.model_path << "\",";
+    ss << "\"model_dir\":\"" << config.model_dir << "\",";
     ss << "\"confidence_threshold\":" << config.confidence_threshold << ",";
     ss << "\"update_database\":" << (config.update_database ? "true" : "false");
     ss << "},";
@@ -243,12 +246,17 @@ string get_auto_classify_candidate_file(const string& db_name) {
 
 // Run candidate detection program
 int run_check_candidates(const string& db_name) {
+    if (!is_valid_sql_identifier(db_name)) {
+        cerr << "[ERROR] Invalid database name for check_candidates: " << db_name << endl;
+        return -1;
+    }
     // Ensure TDengine config and libs are visible when invoked from web/ directory
+    string safe_db = sanitize_shell_arg(db_name);
     string cmd = "bash -c '"
                  "export LD_LIBRARY_PATH=" + config.libs_path + ":$LD_LIBRARY_PATH; "
                  "export TAOS_CFG_DIR=" + config.taos_cfg_path + "; "
                  "export TAOS_LOG_DIR=/tmp/taos_log; mkdir -p /tmp/taos_log; "
-                 "../insert/check_candidates --db " + db_name +
+                 "../insert/check_candidates --db " + safe_db +
                  "' > /tmp/check_candidates.log 2>&1";
     return system(cmd.c_str());
 }
@@ -319,7 +327,7 @@ double angular_distance(double ra1, double dec1, double ra2, double dec2) {
     return acos(cos_d) * 180.0 / M_PI;
 }
 
-string json_escape(const string& str);
+// json_escape() is now provided by <tdlight/sanitize.h>
 
 string csv_to_json(const string& filename) {
     ifstream file(filename);
@@ -733,25 +741,8 @@ vector<ObjectInfo> region_search(double ra_min, double ra_max, double dec_min, d
     return results;
 }
 
-string json_escape(const string& str) {
-    stringstream ss;
-    for (char c : str) {
-        if (c == '"') ss << "\\\"";
-        else if (c == '\\') ss << "\\\\";
-        else if (c == '\b') ss << "\\b";
-        else if (c == '\f') ss << "\\f";
-        else if (c == '\n') ss << "\\n";
-        else if (c == '\r') ss << "\\r";
-        else if (c == '\t') ss << "\\t";
-        else if ((unsigned char)c < 0x20) {
-            char buf[7];
-            sprintf(buf, "\\u%04x", (unsigned char)c);
-            ss << buf;
-        }
-        else ss << c;
-    }
-    return ss.str();
-}
+// Input sanitization & JSON escape are now provided by <tdlight/sanitize.h>
+// via `using namespace tdlight;` above.
 
 string objects_to_json(const vector<ObjectInfo>& objects) {
     stringstream json;
@@ -840,6 +831,14 @@ string handle_request(const string& request) {
     }
     else if (path.find("/api/object/") == 0) {
         string table_name = path.substr(12);
+        if (!is_valid_sql_identifier(table_name)) {
+            string error = "{\"error\":\"Invalid table name\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(error.length()) + "\r\n"
+                   "\r\n" + error;
+        }
         
         string tag_query = "SELECT healpix_id, source_id, ra, dec, cls, band FROM " + table_name + " LIMIT 1";
         TAOS_RES* tag_res = taos_query(conn, tag_query.c_str());
@@ -888,6 +887,14 @@ string handle_request(const string& request) {
     }
     else if (path.find("/api/lightcurve/") == 0) {
         string table_name = path.substr(16);
+        if (!is_valid_sql_identifier(table_name)) {
+            string error = "{\"error\":\"Invalid table name\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(error.length()) + "\r\n"
+                   "\r\n" + error;
+        }
         
         string time_start = params.find("time_start") != params.end() ? params["time_start"] : "";
         string time_end = params.find("time_end") != params.end() ? params["time_end"] : "";
@@ -904,6 +911,10 @@ string handle_request(const string& request) {
     else if (path == "/api/cone_search") {
         if (params.find("ra") == params.end() || params.find("dec") == params.end() || params.find("radius") == params.end()) {
             return "HTTP/1.1 400 Bad Request\r\n\r\nMissing parameters";
+        }
+        
+        if (!is_valid_numeric(params["ra"]) || !is_valid_numeric(params["dec"]) || !is_valid_numeric(params["radius"])) {
+            return "HTTP/1.1 400 Bad Request\r\n\r\nInvalid numeric parameters";
         }
         
         double ra = stod(params["ra"]);
@@ -961,6 +972,14 @@ string handle_request(const string& request) {
         }
         
         string source_id = params["id"];
+        if (!is_valid_numeric(source_id)) {
+            string error = "{\"error\":\"Invalid source_id: must be numeric\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(error.length()) + "\r\n"
+                   "\r\n" + error;
+        }
         
         string query = "SELECT healpix_id, source_id, FIRST(ra) as ra, FIRST(dec) as dec, COUNT(*) as data_count, "
                        "FIRST(cls) as cls, FIRST(band) as band "
@@ -1265,6 +1284,8 @@ string handle_request(const string& request) {
             usleep(50000);
         }
         
+        string safe_task_id = sanitize_shell_arg(task_id);
+        string safe_classify_db = sanitize_shell_arg(config.db_name);
         string cmd = "nohup bash -c '"
                      "export LD_LIBRARY_PATH=" + config.libs_path + ":$LD_LIBRARY_PATH && "
                      "export TAOS_CFG_DIR=" + config.taos_cfg_path + " && "
@@ -1274,8 +1295,8 @@ string handle_request(const string& request) {
                      "../class/classify_pipeline.py "
                      "--input /tmp/classid.txt "
                      "--output /tmp/class_results.json "
-                     "--db " + config.db_name + " "
-                     "--task-id '" + task_id + "' "
+                     "--db " + safe_classify_db + " "
+                     "--task-id " + safe_task_id + " "
                      "--threshold " + to_string(config.confidence_threshold) + " "
                      "--web-mode"
                      "' > /tmp/classify_pipeline.log 2>&1 &";
@@ -1314,31 +1335,7 @@ string handle_request(const string& request) {
                "Content-Length: 0\r\n"
                "\r\n";
     }
-    else if (path == "/api/classify_results") {
-        int limit = 1000;
-        if (params.find("limit") != params.end()) {
-            limit = stoi(params["limit"]);
-        }
-        
-        string result_file = "/tmp/classify_results_" + to_string(limit) + ".json";
-        ifstream file(result_file);
-        string json_result;
-        
-        if (file.is_open()) {
-            stringstream buffer;
-            buffer << file.rdbuf();
-            json_result = buffer.str();
-            file.close();
-        } else {
-            json_result = "{\"error\": \"No results found for limit=" + to_string(limit) + ". Run classification first.\"}";
-        }
-        
-        return "HTTP/1.1 200 OK\r\n"
-               "Content-Type: application/json\r\n"
-               "Access-Control-Allow-Origin: *\r\n"
-               "Content-Length: " + to_string(json_result.length()) + "\r\n"
-               "\r\n" + json_result;
-    }
+    // NOTE: Duplicate /api/classify_results route removed (was unreachable dead code)
     else if (path == "/api/length_analysis") {
         string csv_file = "../data/confidence_all_lengths_results.csv";
         ifstream file(csv_file);
@@ -1473,6 +1470,16 @@ string handle_request(const string& request) {
                    "\r\n" + err;
         }
         
+        // Validate db_name to prevent SQL injection
+        if (!is_valid_sql_identifier(db_name)) {
+            string err = "{\"success\":false,\"error\":\"Invalid database name\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(err.length()) + "\r\n"
+                   "\r\n" + err;
+        }
+        
         // Prevent deletion of system databases
         if (db_name == "information_schema" || db_name == "performance_schema") {
             string err = "{\"success\":false,\"error\":\"Cannot drop system database\"}";
@@ -1524,6 +1531,26 @@ string handle_request(const string& request) {
                    "\r\n" + err;
         }
         
+        // Validate paths to prevent command injection
+        if (!is_valid_path(data_path) || !is_valid_path(coords_path)) {
+            string err = "{\"success\":false,\"error\":\"Invalid path: contains forbidden characters\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(err.length()) + "\r\n"
+                   "\r\n" + err;
+        }
+        
+        // Validate db_name
+        if (!db_name.empty() && !is_valid_sql_identifier(db_name)) {
+            string err = "{\"success\":false,\"error\":\"Invalid database name\"}";
+            return "HTTP/1.1 400 Bad Request\r\n"
+                   "Content-Type: application/json\r\n"
+                   "Access-Control-Allow-Origin: *\r\n"
+                   "Content-Length: " + to_string(err.length()) + "\r\n"
+                   "\r\n" + err;
+        }
+        
         // Stop previous import task
         system("pkill -9 -f 'catalog_importer' 2>/dev/null");
         system("pkill -9 -f 'lightcurve_importer' 2>/dev/null");
@@ -1542,13 +1569,18 @@ string handle_request(const string& request) {
         string libs_path = "../libs";
         string env_prefix = "LD_LIBRARY_PATH=" + libs_path + ":$LD_LIBRARY_PATH ";
         
+        // Use sanitized shell arguments to prevent command injection
+        string safe_data_path = sanitize_shell_arg(data_path);
+        string safe_coords_path = sanitize_shell_arg(coords_path);
+        string safe_db_name = sanitize_shell_arg(db_name);
+        
         string cmd;
         if (type == "catalog") {
             cmd = "nohup bash -c '" + env_prefix + 
                   "../insert/catalog_importer "
-                  "--catalogs " + data_path + " "
-                  "--coords " + coords_path + " "
-                  "--db " + db_name + " "
+                  "--catalogs " + safe_data_path + " "
+                  "--coords " + safe_coords_path + " "
+                  "--db " + safe_db_name + " "
                   "--nside " + to_string(nside) + " "
                   "--threads " + to_string(threads) + " "
                   "--vgroups " + to_string(vgroups) +
@@ -1556,9 +1588,9 @@ string handle_request(const string& request) {
         } else {
             cmd = "nohup bash -c '" + env_prefix + 
                   "../insert/lightcurve_importer "
-                  "--lightcurves_dir " + data_path + " "
-                  "--coords " + coords_path + " "
-                  "--db " + db_name + " "
+                  "--lightcurves_dir " + safe_data_path + " "
+                  "--coords " + safe_coords_path + " "
+                  "--db " + safe_db_name + " "
                   "--threads " + to_string(threads) + " "
                   "--vgroups " + to_string(vgroups) +
                   "' > /tmp/import.log 2>&1 &";
@@ -1694,14 +1726,16 @@ string handle_request(const string& request) {
             progress.close();
         }
         
-        // Start auto-classification task
+        // Start auto-classification task (sanitized arguments)
+        string safe_candidate = sanitize_shell_arg(candidate_file);
+        string safe_auto_db = sanitize_shell_arg(db_name);
         string cmd = "nohup bash -c '"
                      "export LD_LIBRARY_PATH=" + config.libs_path + ":$LD_LIBRARY_PATH && "
                      "export TAOS_CFG_DIR=" + config.taos_cfg_path + " && "
                      "" + config.python_path + " "
                      "../class/auto_classify.py "
-                     "--candidate-file " + candidate_file + " "
-                     "--db " + db_name + " "
+                     "--candidate-file " + safe_candidate + " "
+                     "--db " + safe_auto_db + " "
                      "--threshold " + to_string(config.confidence_threshold) + " "
                      "--batch-size " + to_string(batch_size) +
                      (resume ? " --resume" : "") +

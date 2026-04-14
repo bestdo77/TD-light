@@ -26,23 +26,42 @@ case "$1" in
         # Light curve import
         # Usage: ./run.sh lightcurve [database_name]
         DB_NAME="${2:-lightcurve_db}"
-        echo "🚀 Importing light curves to database: ${DB_NAME}"
+        echo "Importing light curves to database: ${DB_NAME}"
         ${APPTAINER_BIN} exec "${APPTAINER_OPTS[@]}" ${CONTAINER} \
             /app/src/IO/import/lightcurve_importer \
             /app/data/gaiadr2/individual_lightcurves \
             ${DB_NAME}
         ;;
     
+    crossmatch)
+        # Cross-match new catalog with database
+        # Usage: ./run.sh crossmatch <catalog.csv> [database_name] [match_radius_arcsec]
+        CATALOG_FILE="$2"
+        DB_NAME="${3:-gaiadr2_lc}"
+        MATCH_RADIUS="${4:-1.0}"
+        echo "Cross-matching catalog: ${CATALOG_FILE}"
+        echo "Database: ${DB_NAME}, Match radius: ${MATCH_RADIUS} arcsec"
+        ${APPTAINER_BIN} exec "${APPTAINER_OPTS[@]}" ${CONTAINER} \
+            /app/src/IO/import/crossmatch \
+            --catalog "${CATALOG_FILE}" \
+            --db ${DB_NAME} \
+            --radius ${MATCH_RADIUS}
+        ;;
+    
     catalog)
-        # Catalog import
-        # Usage: ./run.sh catalog [database_name]
-        DB_NAME="${2:-catalog_db}"
-        echo "🚀 Importing catalog to database: ${DB_NAME}"
+        # Catalog import with automatic cross-match
+        # Usage: ./run.sh catalog [database_name] [crossmatch_radius]
+        DB_NAME="${2:-gaiadr2_lc}"
+        MATCH_RADIUS="${3:-1.0}"
+        echo "Importing catalog to database: ${DB_NAME}"
+        echo "Cross-match radius: ${MATCH_RADIUS} arcsec"
         ${APPTAINER_BIN} exec "${APPTAINER_OPTS[@]}" ${CONTAINER} \
             /app/src/IO/import/catalog_importer \
             --catalogs /app/data/catalogs_gaiadr2/catalogs \
             --coords /app/data/gaiadr2/source_coordinates.csv \
-            --db ${DB_NAME}
+            --db ${DB_NAME} \
+            --crossmatch 1 \
+            --radius ${MATCH_RADIUS}
         ;;
     
     sql)
@@ -50,7 +69,7 @@ case "$1" in
         # Usage: ./run.sh sql "SQL statement"
         shift
         SQL="$*"
-        echo "📊 Executing SQL: ${SQL}"
+        echo "Executing SQL: ${SQL}"
         ${APPTAINER_BIN} exec \
             --bind "${PROJECT_ROOT}/runtime/taos_home/cfg:/etc/taos" \
             ${CONTAINER} \
@@ -59,13 +78,13 @@ case "$1" in
     
     shell)
         # Enter container shell
-        echo "🐚 Entering TDengine container..."
+        echo "Entering TDengine container..."
         ${APPTAINER_BIN} shell "${APPTAINER_OPTS[@]}" ${CONTAINER}
         ;;
     
     compile)
         # Compile import programs
-        echo "🔧 Compiling import programs..."
+        echo "Compiling import programs..."
         cd ${IMPORT_DIR}
         TAOS_DIR="${PROJECT_ROOT}/tdengine-fs/usr/local/taos"
         LIBS_DIR="${PROJECT_ROOT}/runtime/libs"
@@ -83,7 +102,7 @@ case "$1" in
             -ltaos -lhealpix_cxx -lpthread \
             -Wl,-rpath,${TAOS_DIR}/driver -Wl,-rpath,${LIBS_DIR}
         
-        echo "✅ Compilation complete"
+        echo "Compilation complete"
         ;;
     
     *)
@@ -92,15 +111,17 @@ case "$1" in
         echo "Usage: $0 <command> [args]"
         echo ""
         echo "Commands:"
-        echo "  lightcurve [db]  Import light curve data"
-        echo "  catalog [db]     Import catalog data"
-        echo "  sql \"SQL\"        Execute SQL statement"
-        echo "  shell            Enter container shell"
-        echo "  compile          Compile import programs"
+        echo "  crossmatch <file> [db] [radius]  Cross-match catalog with database"
+        echo "  catalog [db] [radius]            Import catalog with auto cross-match"
+        echo "  lightcurve [db]                  Import light curve data"
+        echo "  sql \"SQL\"                        Execute SQL statement"
+        echo "  shell                            Enter container shell"
+        echo "  compile                          Compile import programs"
         echo ""
         echo "Examples:"
+        echo "  $0 crossmatch new_catalog.csv gaiadr2_lc 1.0"
+        echo "  $0 catalog gaiadr2_lc 1.0        # Import with cross-match"
         echo "  $0 lightcurve test_db"
-        echo "  $0 catalog catalog_test"
         echo "  $0 sql \"SHOW DATABASES;\""
         echo "  $0 sql \"DROP DATABASE IF EXISTS test_db;\""
         ;;

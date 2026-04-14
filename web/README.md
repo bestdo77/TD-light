@@ -10,13 +10,13 @@ Provides a complete web service for light curve data management and classificati
 
 | Feature | Description |
 |---------|-------------|
-| 📋 Object List | Browse objects in database |
-| 📈 Light Curves | View time-series observation data and visualization |
-| 🔍 Spatial Search | Cone search and region search |
-| 🌌 Sky Map | 3D visualization of object distribution |
-| 🤖 Intelligent Classification | Real-time classification using LightGBM model |
-| 📥 Data Import | Batch import of CSV data |
-| ⚙️ Database Management | Multi-database switching |
+| Object List | Browse objects in database |
+| Light Curves | View time-series observation data and visualization |
+| Spatial Search | Cone search and region search |
+| Sky Map | 3D visualization of object distribution |
+| Intelligent Classification | Real-time classification using LightGBM model |
+| Data Import | Batch import of CSV data |
+| Database Management | Multi-database switching |
 
 ---
 
@@ -67,7 +67,7 @@ Open browser: **http://localhost:5001**
 
 ### Data Import
 
-⚠️ **Before importing light curves, prepare**:
+Note: **Before importing light curves, prepare**:
 1. Light curve CSV directory (one file per object)
 2. Coordinate file (containing RA/DEC for all objects)
 

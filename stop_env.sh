@@ -28,7 +28,7 @@ if pgrep -f "web_api" > /dev/null; then
     echo -e "[i] Stopping web server..."
     pkill -f "web_api"
     sleep 1
-    echo -e "${GREEN}[✓] Web server stopped${NC}"
+    echo -e "${GREEN}[OK] Web server stopped${NC}"
 else
     echo -e "${YELLOW}[i] Web server not running${NC}"
 fi
@@ -45,7 +45,7 @@ if [[ "$STOP_TDENGINE" == "true" ]]; then
         sleep 2
         
         if ! pgrep -x taosd > /dev/null; then
-            echo -e "${GREEN}[✓] TDengine stopped${NC}"
+            echo -e "${GREEN}[OK] TDengine stopped${NC}"
         else
             echo -e "${YELLOW}[!] TDengine still running, force kill...${NC}"
             pkill -9 -x taosd || true

@@ -1,6 +1,11 @@
 /*
- * Catalog Data Importer - Optimized Version
- * Uses STMT API + Direct Assignment + Two-Phase (Create Tables First, Then Insert)
+ * Catalog Data Importer with Integrated Cross-Match
+ * Features:
+ * - Automatic cross-match with existing objects in database
+ * - Matched objects use database source_id
+ * - New objects get hash-based unique ID
+ * - Uses STMT API + Direct Assignment + Two-Phase
+ * 
  * Compile: g++ -std=c++17 -O3 -march=native catalog_importer.cpp -o catalog_importer -ltaos -lhealpix_cxx -lpthread
  */
 
@@ -32,6 +37,8 @@ int NUM_THREADS = 16;                     // Number of parallel threads (default
 int NUM_VGROUPS = 32;                     // Number of virtual groups (default: 32 for compatibility)
 constexpr int BATCH_SIZE = 10000;         // Rows per insert batch
 constexpr int BUFFER_SIZE = 256;          // Memory buffer per vgroup (MB)
+double CROSSMATCH_RADIUS_ARCSEC = 1.0;    // Cross-match radius in arcseconds
+bool ENABLE_CROSSMATCH = true;            // Enable automatic cross-match
 
 // Read TDengine host address from environment variable
 string get_taos_host() {
@@ -40,6 +47,233 @@ string get_taos_host() {
         return string(env_host);
     }
     return "localhost";
+}
+
+// ==================== Cross-Match Utilities ====================
+
+// Calculate angular distance using Haversine formula (returns arcseconds)
+double angular_distance_arcsec(double ra1, double dec1, double ra2, double dec2) {
+    double ra1_rad = ra1 * M_PI / 180.0;
+    double dec1_rad = dec1 * M_PI / 180.0;
+    double ra2_rad = ra2 * M_PI / 180.0;
+    double dec2_rad = dec2 * M_PI / 180.0;
+    
+    double delta_ra = ra2_rad - ra1_rad;
+    double delta_dec = dec2_rad - dec1_rad;
+    
+    double a = sin(delta_dec / 2.0) * sin(delta_dec / 2.0) +
+               cos(dec1_rad) * cos(dec2_rad) *
+               sin(delta_ra / 2.0) * sin(delta_ra / 2.0);
+    double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+    
+    return c * 180.0 / M_PI * 3600.0;  // Convert to arcseconds
+}
+
+// Generate hash-based unique ID for new objects (always positive)
+int64_t generate_hash_id(double ra, double dec, int64_t salt = 20260404) {
+    uint64_t ra_int = static_cast<uint64_t>(fabs(ra) * 1e6);
+    uint64_t dec_int = static_cast<uint64_t>(fabs(dec) * 1e6);
+    
+    uint64_t hash = 0xcbf29ce484222325ULL;  // FNV offset basis
+    
+    auto mix = [&](uint64_t val) {
+        hash ^= val;
+        hash *= 0x100000001b3ULL;  // FNV prime
+    };
+    
+    mix(ra_int);
+    mix(dec_int);
+    mix(static_cast<uint64_t>(salt));
+    
+    // Ensure result is positive and within int64_t range
+    uint64_t result = hash % 8000000000000000000ULL + 1000000000000000000ULL;
+    return static_cast<int64_t>(result);
+}
+
+// Database object for cross-match
+struct DBObject {
+    int64_t source_id;
+    double ra, dec;
+    long healpix_id;
+};
+
+// Spatial index for fast cross-match
+struct SpatialIndex {
+    unordered_map<long, vector<const DBObject*>> healpix_map;
+    int nside;
+    Healpix_Base hp;
+    
+    SpatialIndex(int nside_val) : nside(nside_val), hp(nside_val, NEST, SET_NSIDE) {}
+    
+    void build(const vector<DBObject>& db_objects) {
+        for (const auto& obj : db_objects) {
+            healpix_map[obj.healpix_id].push_back(&obj);
+        }
+    }
+    
+    vector<long> get_neighboring_pixels(double ra, double dec) const {
+        double theta = (90.0 - dec) * M_PI / 180.0;
+        double phi = ra * M_PI / 180.0;
+        if (theta < 0) theta = 0;
+        if (theta > M_PI) theta = M_PI;
+        pointing pt(theta, phi);
+        
+        long current_pix = hp.ang2pix(pt);
+        vector<long> neighbors;
+        neighbors.push_back(current_pix);
+        
+        fix_arr<int, 8> pix_neighbors;
+        hp.neighbors(current_pix, pix_neighbors);
+        for (int i = 0; i < 8; i++) {
+            if (pix_neighbors[i] >= 0) {
+                neighbors.push_back(static_cast<long>(pix_neighbors[i]));
+            }
+        }
+        
+        return neighbors;
+    }
+    
+    const DBObject* find_match(double ra, double dec, double max_sep_arcsec, double& out_sep) const {
+        const DBObject* best_match = nullptr;
+        double best_sep = max_sep_arcsec;
+        
+        auto candidates = get_neighboring_pixels(ra, dec);
+        
+        for (long pix : candidates) {
+            auto it = healpix_map.find(pix);
+            if (it == healpix_map.end()) continue;
+            
+            for (const DBObject* obj : it->second) {
+                double sep = angular_distance_arcsec(ra, dec, obj->ra, obj->dec);
+                if (sep < best_sep) {
+                    best_sep = sep;
+                    best_match = obj;
+                }
+            }
+        }
+        
+        out_sep = best_sep;
+        return best_match;
+    }
+};
+
+/**
+ * Perform cross-match between coordinates and database objects
+ * 
+ * @param coords_map Input: source_id -> (ra, dec) map
+ * @param db_name Database name to query
+ * @param super_table Super table name
+ * @param nside HEALPix NSIDE parameter
+ * @param match_radius Match radius in arcseconds
+ * @param enable_crossmatch Whether to enable cross-match
+ * @return Map: original_source_id -> unique_source_id
+ */
+unordered_map<long long, int64_t> perform_crossmatch(
+    const unordered_map<long long, pair<double, double>>& coords_map,
+    const string& db_name,
+    const string& super_table,
+    int nside,
+    double match_radius,
+    bool enable_crossmatch
+) {
+    unordered_map<long long, int64_t> crossmatch_results;
+    
+    if (!enable_crossmatch) {
+        // If cross-match disabled, use original IDs
+        for (const auto& [orig_id, coord] : coords_map) {
+            crossmatch_results[orig_id] = orig_id;
+        }
+        return crossmatch_results;
+    }
+    
+    cout << "\n[INFO] Performing cross-match with database..." << endl;
+    auto crossmatch_start = high_resolution_clock::now();
+    
+    // Load existing objects from database
+    string taos_host = get_taos_host();
+    TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6030);
+    
+    if (!conn) {
+        cerr << "  [WARN] Failed to connect to database for cross-match" << endl;
+        cerr << "  [WARN] Using original source_id without cross-match" << endl;
+        
+        // Fallback: use original IDs
+        for (const auto& [orig_id, coord] : coords_map) {
+            crossmatch_results[orig_id] = orig_id;
+        }
+        return crossmatch_results;
+    }
+    
+    string sql = "SELECT source_id, ra, dec, healpix_id FROM " + super_table + 
+                " GROUP BY source_id, ra, dec, healpix_id";
+    TAOS_RES* res = taos_query(conn, sql.c_str());
+    
+    if (taos_errno(res) != 0) {
+        cerr << "  [WARN] Cross-match query failed: " << taos_errstr(res) << endl;
+        cerr << "  [WARN] Using original source_id without cross-match" << endl;
+        taos_free_result(res);
+        taos_close(conn);
+        
+        // Fallback: use original IDs
+        for (const auto& [orig_id, coord] : coords_map) {
+            crossmatch_results[orig_id] = orig_id;
+        }
+        return crossmatch_results;
+    }
+    
+    // Load database objects
+    vector<DBObject> db_objects;
+    TAOS_ROW row;
+    while ((row = taos_fetch_row(res)) != nullptr) {
+        if (row[0] == nullptr || row[1] == nullptr || row[2] == nullptr || row[3] == nullptr) {
+            continue;  // Skip invalid rows
+        }
+        
+        DBObject obj;
+        obj.source_id = *(int64_t*)row[0];
+        obj.ra = *(double*)row[1];
+        obj.dec = *(double*)row[2];
+        obj.healpix_id = *(int64_t*)row[3];
+        db_objects.push_back(obj);
+    }
+    taos_free_result(res);
+    taos_close(conn);
+    
+    cout << "  [INFO] Loaded " << db_objects.size() << " objects from database" << endl;
+    
+    // Build spatial index
+    SpatialIndex index(nside);
+    index.build(db_objects);
+    
+    // Perform cross-match for each coordinate
+    atomic<int> matched_count{0};
+    atomic<int> new_count{0};
+    
+    for (const auto& [orig_id, coord] : coords_map) {
+        double sep = 0;
+        const DBObject* match = index.find_match(coord.first, coord.second, match_radius, sep);
+        
+        if (match != nullptr) {
+            // Matched - use database source_id
+            crossmatch_results[orig_id] = match->source_id;
+            matched_count++;
+        } else {
+            // No match - generate hash ID
+            crossmatch_results[orig_id] = generate_hash_id(coord.first, coord.second, orig_id);
+            new_count++;
+        }
+    }
+    
+    auto crossmatch_end = high_resolution_clock::now();
+    double crossmatch_time = duration_cast<milliseconds>(crossmatch_end - crossmatch_start).count() / 1000.0;
+    
+    cout << "  [OK] Cross-match complete (" << fixed << setprecision(2) << crossmatch_time << "s)" << endl;
+    cout << "     - Matched: " << matched_count << " (" 
+         << (coords_map.size() > 0 ? matched_count * 100.0 / coords_map.size() : 0) << "%)" << endl;
+    cout << "     - New objects: " << new_count << " ("
+         << (coords_map.size() > 0 ? new_count * 100.0 / coords_map.size() : 0) << "%)" << endl;
+    
+    return crossmatch_results;
 }
 
 struct Record {
@@ -68,6 +302,9 @@ struct PerfStats {
     atomic<int> tables_created{0};
 };
 
+// Global stop flag for graceful shutdown
+atomic<bool> stop_requested{false};
+
 mutex cout_mutex;
 
 vector<string> split(const string& line, char delim) {
@@ -78,11 +315,23 @@ vector<string> split(const string& line, char delim) {
     return result;
 }
 
-// Calculate magnitude error
-double calculateMagError(double flux, double flux_error) {
-    if (flux <= 0) return 0.01;
-    return 1.0857 * flux_error / flux;
+// SQL string escape (prevent SQL injection)
+string sql_escape(const string& str) {
+    string result;
+    result.reserve(str.size() + 10);
+    for (char c : str) {
+        if (c == '\'') {
+            result += "''";  // SQL escape: ' -> ''
+        } else if (c == '\\') {
+            result += "\\\\";
+        } else {
+            result += c;
+        }
+    }
+    return result;
 }
+
+// Note: calculateMagError removed - not used in current implementation
 
 // ==================== Phase 1: Parallel Table Creation ====================
 void create_tables_worker(int thread_id, const vector<SubTable*>& tables, 
@@ -93,26 +342,35 @@ void create_tables_worker(int thread_id, const vector<SubTable*>& tables,
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6030);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ Thread " << thread_id << " connection failed" << endl;
+        cerr << "[ERROR] Thread " << thread_id << " connection failed" << endl;
         return;
     }
     
     for (size_t i = start; i < end; ++i) {
+        // Check stop flag
+        if (stop_requested.load()) {
+            break;
+        }
+        
         const SubTable* st = tables[i];
+        
+        // FIX: Escape cls to prevent SQL injection
+        string escaped_cls = sql_escape(st->cls);
         
         stringstream sql;
         sql << "CREATE TABLE IF NOT EXISTS " << st->table_name 
             << " USING " << super_table 
             << " TAGS(" << st->healpix_id << "," << st->source_id << "," 
-            << fixed << setprecision(6) << st->ra << "," << st->dec << ",'" << st->cls << "')";
+            << fixed << setprecision(6) << st->ra << "," << st->dec << ",'" << escaped_cls << "')";
         
         TAOS_RES* res = taos_query(conn, sql.str().c_str());
         if (taos_errno(res) != 0) {
             lock_guard<mutex> lock(cout_mutex);
             cerr << "[ERROR] Table creation failed " << st->table_name << ": " << taos_errstr(res) << endl;
+        } else {
+            stats.tables_created++;
         }
         taos_free_result(res);
-        stats.tables_created++;
     }
     
     taos_close(conn);
@@ -126,7 +384,7 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", db_name.c_str(), 6030);
     if (!conn) {
         lock_guard<mutex> lock(cout_mutex);
-        cerr << "❌ Thread " << thread_id << " connection failed" << endl;
+        cerr << "[ERROR] Thread " << thread_id << " connection failed" << endl;
         return;
     }
     
@@ -159,6 +417,11 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
     vector<double> jd_buf(BATCH_SIZE);
     
     for (size_t i = start; i < end; ++i) {
+        // Check stop flag
+        if (stop_requested.load()) {
+            break;
+        }
+        
         const SubTable* st = tables[i];
         if (st->records.empty()) continue;
         
@@ -171,6 +434,11 @@ void insert_worker(int thread_id, const vector<SubTable*>& tables,
         
         size_t total = st->records.size();
         for (size_t batch_start = 0; batch_start < total; batch_start += BATCH_SIZE) {
+            // Check stop flag in inner loop
+            if (stop_requested.load()) {
+                break;
+            }
+            
             size_t batch_end = min(batch_start + BATCH_SIZE, total);
             int batch_count = batch_end - batch_start;
             
@@ -285,6 +553,8 @@ int main(int argc, char* argv[]) {
     string super_table = "sensor_data";
     int nside = 64;
     bool drop_db = false;
+    bool enable_crossmatch = ENABLE_CROSSMATCH;
+    double crossmatch_radius = CROSSMATCH_RADIUS_ARCSEC;
     
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -295,35 +565,47 @@ int main(int argc, char* argv[]) {
         else if (arg == "--threads" && i + 1 < argc) NUM_THREADS = stoi(argv[++i]);
         else if (arg == "--vgroups" && i + 1 < argc) NUM_VGROUPS = stoi(argv[++i]);
         else if (arg == "--drop_db") drop_db = true;
+        else if (arg == "--crossmatch" && i + 1 < argc) {
+            string val = argv[++i];
+            enable_crossmatch = (val == "true" || val == "1");
+        }
+        else if (arg == "--radius" && i + 1 < argc) crossmatch_radius = stod(argv[++i]);
     }
     
     if (catalog_dir.empty() || coords_file.empty()) {
         cout << "Usage: " << argv[0] << " --catalogs <dir> --coords <file> [options]" << endl;
         cout << "\nOptions:" << endl;
-        cout << "  --db <name>         Database name (default: gaiadr2_lc)" << endl;
-        cout << "  --nside <N>         HEALPix NSIDE (default: 64)" << endl;
-        cout << "  --threads <N>       Number of threads (default: 16)" << endl;
-        cout << "  --vgroups <N>       Number of VGroups (default: 32)" << endl;
-        cout << "  --drop_db           Drop existing database" << endl;
+        cout << "  --db <name>              Database name (default: gaiadr2_lc)" << endl;
+        cout << "  --nside <N>              HEALPix NSIDE (default: 64)" << endl;
+        cout << "  --threads <N>            Number of threads (default: 16)" << endl;
+        cout << "  --vgroups <N>            Number of VGroups (default: 32)" << endl;
+        cout << "  --drop_db                Drop existing database" << endl;
+        cout << "  --crossmatch <0|1>       Enable cross-match (default: 1)" << endl;
+        cout << "  --radius <arcsec>        Cross-match radius (default: 1.0)" << endl;
         return 1;
     }
     
-    cout << "\n=== Catalog Data Importer (Optimized) ===" << endl;
+    cout << "\n=== Catalog Data Importer with Cross-Match ===" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
     cout << " Catalog directory: " << catalog_dir << endl;
     cout << " Coordinates file: " << coords_file << endl;
     cout << " Database: " << db_name << endl;
     cout << " Threads: " << NUM_THREADS << endl;
     cout << " vgroups: " << NUM_VGROUPS << endl;
+    cout << " Cross-match: " << (enable_crossmatch ? "enabled" : "disabled") << endl;
+    if (enable_crossmatch) {
+        cout << " Match radius: " << fixed << setprecision(2) << crossmatch_radius << " arcsec" << endl;
+    }
     cout << " Batch size: " << BATCH_SIZE << " rows/batch" << endl;
     cout << " HEALPix NSIDE: " << nside << endl;
     cout << " Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err" << endl;
     cout << " Strategy: STMT API + Direct Assignment + Two-Phase" << endl;
     cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
     
-    PerfStats stats;
-    auto total_start = high_resolution_clock::now();
-    
+    // ==================== Pre-processing: Cross-Match (NOT included in timing) ====================
+    unordered_map<long long, int64_t> crossmatch_results;
+    string taos_host = get_taos_host();  // Get host early for cross-match
+
     // Derive config directory: prefer env var, then project paths
     string taos_cfg_dir;
     const char* env_cfg = getenv("TAOS_CFG_DIR");
@@ -345,19 +627,77 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    
+
     if (!taos_cfg_dir.empty()) {
         taos_options(TSDB_OPTION_CONFIGDIR, taos_cfg_dir.c_str());
         cout << "[INFO] TDengine config: " << taos_cfg_dir << endl;
     } else {
         cerr << "[WARN] No TDengine config found. Set TAOS_CFG_DIR or run from project root." << endl;
     }
-    
-    // Initialize TDengine
+
+    // Initialize TDengine before any taos_connect call
     taos_init();
+
+    // Read coordinates first (needed for cross-match)
+    cout << "\n[PRE-PROCESS] Reading coordinates file..." << endl;
+    auto coord_start = high_resolution_clock::now();
     
-    // Connect to database
-    string taos_host = get_taos_host();
+    unordered_map<long long, pair<double, double>> coords_map;
+    ifstream coord_file(coords_file);
+    if (!coord_file.is_open()) {
+        cerr << "[ERROR] Cannot open coordinates file: " << coords_file << endl;
+        taos_cleanup();
+        return 1;
+    }
+    
+    string line;
+    getline(coord_file, line);  // Skip header
+    long long coord_skipped = 0;
+    while (getline(coord_file, line)) {
+        auto parts = split(line, ',');
+        if (parts.size() >= 3) {
+            try {
+                string& sid = parts[0];
+                sid.erase(0, sid.find_first_not_of(" \t\r\n\xEF\xBB\xBF"));
+                sid.erase(sid.find_last_not_of(" \t\r\n") + 1);
+                if (sid.empty()) { coord_skipped++; continue; }
+                long long source_id = stoll(sid);
+                double ra = stod(parts[1]);
+                double dec = stod(parts[2]);
+                coords_map[source_id] = {ra, dec};
+            } catch (const exception& e) {
+                coord_skipped++;
+                if (coord_skipped <= 3) {
+                    cerr << "  [WARN] Skip bad coord line: " << line.substr(0, 60) 
+                         << "... (" << e.what() << ")" << endl;
+                }
+            }
+        }
+    }
+    coord_file.close();
+    if (coord_skipped > 0) {
+        cout << "  [WARN] Skipped " << coord_skipped << " invalid coordinate rows" << endl;
+    }
+    
+    auto coord_end = high_resolution_clock::now();
+    double coord_time = duration_cast<milliseconds>(coord_end - coord_start).count() / 1000.0;
+    cout << "  [OK] Read " << coords_map.size() << " source coordinates (" 
+         << fixed << setprecision(2) << coord_time << "s)" << endl;
+    
+    // Perform cross-match (excluded from main timing)
+    crossmatch_results = perform_crossmatch(
+        coords_map, db_name, super_table, nside, crossmatch_radius, enable_crossmatch
+    );
+    
+    // ==================== Start Main Import Timing ====================
+    cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << endl;
+    cout << "[INFO] Starting main import process..." << endl;
+    cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << endl;
+    
+    PerfStats stats;
+    auto total_start = high_resolution_clock::now();
+    
+    // Connect to database (reuse taos_host from perform_crossmatch)
     TAOS* conn = taos_connect(taos_host.c_str(), "root", "taosdata", NULL, 6030);
     if (!conn) {
         cerr << "[ERROR] Connection failed (host: " << taos_host << ")" << endl;
@@ -368,7 +708,15 @@ int main(int argc, char* argv[]) {
     // Drop database if requested
     if (drop_db) {
         string drop_sql = "DROP DATABASE IF EXISTS " + db_name;
-        taos_query(conn, drop_sql.c_str());
+        TAOS_RES* drop_res = taos_query(conn, drop_sql.c_str());
+        if (taos_errno(drop_res) != 0) {
+            cerr << "[ERROR] Drop database failed: " << taos_errstr(drop_res) << endl;
+            taos_free_result(drop_res);
+            taos_close(conn);
+            taos_cleanup();
+            return 1;
+        }
+        taos_free_result(drop_res);
         cout << "[INFO] Dropped existing database: " << db_name << endl;
     }
     
@@ -388,8 +736,17 @@ int main(int argc, char* argv[]) {
     }
     taos_free_result(res);
     
+    // Use database - with error checking
     string use_db = "USE " + db_name + ";";
-    taos_query(conn, use_db.c_str());
+    res = taos_query(conn, use_db.c_str());
+    if (taos_errno(res) != 0) {
+        cerr << "[ERROR] Use database failed: " << taos_errstr(res) << endl;
+        taos_free_result(res);
+        taos_close(conn);
+        taos_cleanup();
+        return 1;
+    }
+    taos_free_result(res);
     
     // Create super table
     string create_stable = "CREATE STABLE IF NOT EXISTS " + super_table + 
@@ -412,35 +769,6 @@ int main(int argc, char* argv[]) {
     // Initialize HEALPix
     Healpix_Base hp(nside, NEST, SET_NSIDE);
     
-    // ==================== Read Coordinates File ====================
-    cout << "\n[INFO] Reading coordinates file..." << endl;
-    auto coord_start = high_resolution_clock::now();
-    
-    unordered_map<long long, pair<double, double>> coords_map;
-    ifstream coord_file(coords_file);
-    if (!coord_file.is_open()) {
-        cerr << "[ERROR] Cannot open coordinates file: " << coords_file << endl;
-        taos_cleanup();
-        return 1;
-    }
-    
-    string line;
-    getline(coord_file, line);  // Skip header
-    while (getline(coord_file, line)) {
-        auto parts = split(line, ',');
-        if (parts.size() >= 3) {
-            long long source_id = stoll(parts[0]);
-            double ra = stod(parts[1]);
-            double dec = stod(parts[2]);
-            coords_map[source_id] = {ra, dec};
-        }
-    }
-    coord_file.close();
-    
-    auto coord_end = high_resolution_clock::now();
-    double coord_time = duration_cast<milliseconds>(coord_end - coord_start).count() / 1000.0;
-    cout << "  [OK] Read " << coords_map.size() << " source coordinates (" << fixed << setprecision(2) << coord_time << "s)" << endl;
-    
     // ==================== Read Catalog Files ====================
     // Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err
     cout << "\n[INFO] Reading catalog files..." << endl;
@@ -458,27 +786,54 @@ int main(int argc, char* argv[]) {
     cout << "  [INFO] Found " << catalog_files.size() << " catalog files" << endl;
     
     // Collect data for each source
-    map<long long, SubTable*> source_data;
+    // FIX: Use unordered_map for better performance (O(1) vs O(log n))
+    unordered_map<long long, SubTable*> source_data;
+    source_data.reserve(coords_map.size());  // Pre-allocate to avoid rehashing
+    long long skipped_rows = 0;
     
     for (const auto& catalog_file : catalog_files) {
         ifstream file(catalog_file);
         if (!file.is_open()) continue;
         
         getline(file, line);  // Skip header
+        int line_num = 1;
         
         while (getline(file, line)) {
+            line_num++;
             auto parts = split(line, ',');
-            if (parts.size() < 10) continue;
+            if (parts.size() < 10) { skipped_rows++; continue; }
             
             // Format: source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err
-            long long source_id = stoll(parts[0]);
+            long long source_id;
+            try {
+                // Trim whitespace/BOM from source_id field
+                string& sid = parts[0];
+                sid.erase(0, sid.find_first_not_of(" \t\r\n\xEF\xBB\xBF"));
+                sid.erase(sid.find_last_not_of(" \t\r\n") + 1);
+                if (sid.empty()) { skipped_rows++; continue; }
+                source_id = stoll(sid);
+            } catch (const exception& e) {
+                skipped_rows++;
+                if (skipped_rows <= 5) {
+                    lock_guard<mutex> lock(cout_mutex);
+                    cerr << "  [WARN] Skip bad source_id at " << catalog_file << ":" << line_num 
+                         << " value=\"" << parts[0] << "\" (" << e.what() << ")" << endl;
+                }
+                continue;
+            }
             
             // Use coordinates from coords file
             if (coords_map.find(source_id) == coords_map.end()) continue;
             
-            if (source_data.find(source_id) == source_data.end()) {
+            // Get unique source_id from cross-match results
+            int64_t unique_source_id = source_id;
+            if (enable_crossmatch && crossmatch_results.find(source_id) != crossmatch_results.end()) {
+                unique_source_id = crossmatch_results[source_id];
+            }
+            
+            if (source_data.find(unique_source_id) == source_data.end()) {
                 SubTable* st = new SubTable();
-                st->source_id = source_id;
+                st->source_id = unique_source_id;
                 st->ra = coords_map[source_id].first;
                 st->dec = coords_map[source_id].second;
                 st->cls = parts[3];  // class from catalog
@@ -492,27 +847,46 @@ int main(int argc, char* argv[]) {
                 st->healpix_id = hp.ang2pix(pt);
                 
                 // Set table name after healpix_id is calculated
-                st->table_name = "sensor_data_" + to_string(st->healpix_id) + "_" + to_string(source_id);
+                // Use hash-based short name to avoid collisions while staying within TDengine 64-char limit
+                // Format: t_<healpix>_<abs(hash(source_id)) mod 10^9>
+                // This ensures uniqueness, positive numbers, and short table names
+                long long source_hash = std::abs(unique_source_id % 1000000000LL);
+                st->table_name = "t_" + to_string(st->healpix_id) + "_" + to_string(source_hash);
                 
-                source_data[source_id] = st;
+                source_data[unique_source_id] = st;
             }
             
-            Record rec;
-            rec.band = parts[4];  // band
-            double time_days = stod(parts[5]);  // time
-            // Gaia time is relative to J2010.0 TCB (JD 2455197.5)
-            // Convert to Unix timestamp: subtract Unix Epoch JD (2440587.5), not J2000 (2451545.0)
-            rec.ts_ms = static_cast<int64_t>((time_days + 2455197.5 - 2440587.5) * 86400000);
-            rec.flux = stod(parts[6]);  // flux
-            rec.flux_error = stod(parts[7]);  // flux_err
-            rec.mag = stod(parts[8]);  // mag
-            rec.mag_error = stod(parts[9]);  // mag_err
-            rec.jd_tcb = 2455197.5 + time_days;
-            
-            source_data[source_id]->records.push_back(rec);
-            stats.total_records++;
+            try {
+                Record rec;
+                rec.band = parts[4];  // band
+                double time_days = stod(parts[5]);  // time
+                // Gaia time is relative to J2010.0 TCB (JD 2455197.5)
+                // Convert to Unix timestamp: subtract Unix Epoch JD (2440587.5), not J2000 (2451545.0)
+                rec.ts_ms = static_cast<int64_t>((time_days + 2455197.5 - 2440587.5) * 86400000);
+                rec.flux = stod(parts[6]);  // flux
+                rec.flux_error = stod(parts[7]);  // flux_err
+                rec.mag = stod(parts[8]);  // mag
+                rec.mag_error = stod(parts[9]);  // mag_err
+                rec.jd_tcb = 2455197.5 + time_days;
+                
+                // Use unique_source_id instead of original source_id
+                source_data[unique_source_id]->records.push_back(rec);
+                stats.total_records++;
+            } catch (const exception& e) {
+                skipped_rows++;
+                if (skipped_rows <= 5) {
+                    lock_guard<mutex> lock(cout_mutex);
+                    cerr << "  [WARN] Skip bad numeric field at " << catalog_file << ":" << line_num 
+                         << " (" << e.what() << ")" << endl;
+                }
+                continue;
+            }
         }
         file.close();
+    }
+    
+    if (skipped_rows > 0) {
+        cout << "  [WARN] Skipped " << skipped_rows << " rows with invalid data" << endl;
     }
     
     auto catalog_end = high_resolution_clock::now();

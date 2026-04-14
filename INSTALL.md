@@ -12,10 +12,10 @@ cd TD-light
 
 | Dependency | Required | Installation |
 |------------|----------|--------------|
-| Linux x86_64 | ✓ | - |
-| conda | ✓ | [Miniconda](https://docs.conda.io/en/latest/miniconda.html) |
-| g++ (C++17) | ✓ | `sudo apt install build-essential` |
-| wget/curl | ✓ | Usually pre-installed |
+| Linux x86_64 | Yes | - |
+| conda | Yes | [Miniconda](https://docs.conda.io/en/latest/miniconda.html) |
+| g++ (C++17) | Yes | `sudo apt install build-essential` |
+| wget/curl | Yes | Usually pre-installed |
 
 ## Recommended Project Structure
 

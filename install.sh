@@ -34,7 +34,12 @@ PROJECT_ROOT="$SCRIPT_DIR"
 TDENGINE_URL="https://downloads.tdengine.com/tdengine-tsdb-oss/3.4.0.0/tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz"
 TDENGINE_VERSION="3.4.0.0"
 MODEL_BASE_URL="https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model/resolve/main"
-MODEL_FILES=("lgbm_111w_model.pkl" "metadata.pkl")
+# Hierarchical model: 7 sub-models (pkl + onnx) + label_encoders
+MODEL_SUBMODELS=("init" "variable" "extrinsic" "intrinsic" "eb" "rr" "lpv")
+MODEL_FILES=("label_encoders.pkl")
+for _submodel in "${MODEL_SUBMODELS[@]}"; do
+    MODEL_FILES+=("${_submodel}.pkl" "${_submodel}.onnx")
+done
 
 # Directories
 THIRD_PARTY_DIR="$PROJECT_ROOT/third_party"
@@ -68,7 +73,7 @@ print_step() {
 }
 
 print_success() {
-    echo -e "${GREEN}[✓]${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 print_warning() {
@@ -76,7 +81,7 @@ print_warning() {
 }
 
 print_error() {
-    echo -e "${RED}[✗]${NC} $1"
+    echo -e "${RED}[FAIL]${NC} $1"
 }
 
 print_info() {
@@ -281,12 +286,14 @@ if [[ "$SKIP_DOWNLOAD" != "true" ]]; then
         print_info "TDengine already extracted"
     fi
     
-    # Download models
-    print_step "Downloading classification models..."
+    # Download hierarchical classification models
+    print_step "Downloading hierarchical classification models..."
+    HIER_MODEL_DIR="$MODELS_DIR/hierarchical_unlimited"
+    mkdir -p "$HIER_MODEL_DIR"
     for model_file in "${MODEL_FILES[@]}"; do
-        download_file "$MODEL_BASE_URL/$model_file?download=true" "$MODELS_DIR/$model_file"
+        download_file "$MODEL_BASE_URL/$model_file?download=true" "$HIER_MODEL_DIR/$model_file"
     done
-    print_success "Models downloaded to: $MODELS_DIR"
+    print_success "Hierarchical models downloaded to: $HIER_MODEL_DIR"
 else
     print_header "Step 3: Skipping Downloads (--skip-download)"
 fi
@@ -404,25 +411,34 @@ if [[ "$SKIP_BUILD" != "true" ]] && [[ "$GXX_OK" == "true" ]]; then
     # Set TDENGINE_HOME for Makefile
     export TDENGINE_HOME="$HOME/taos"
     
-    if [ -f "Makefile" ]; then
-        print_step "Compiling C++ binaries..."
-        make clean 2>/dev/null || true
-        
-        if make; then
-            print_success "C++ components built successfully"
-            echo ""
-            print_info "Built binaries:"
-            for target in web/web_api insert/catalog_importer insert/lightcurve_importer query/optimized_query; do
-                if [ -f "$target" ]; then
-                    echo "    ✓ $target"
-                fi
-            done
-        else
-            print_warning "C++ build failed, but continuing..."
-            print_info "You can manually build later with: make"
-        fi
+    print_step "Compiling C++ binaries..."
+
+    BUILD_OK=true
+    cd "$PROJECT_ROOT/web"
+    if bash build.sh; then
+        print_success "Built web/web_api"
     else
-        print_warning "Makefile not found"
+        print_warning "web/build.sh failed"
+        BUILD_OK=false
+    fi
+
+    cd "$PROJECT_ROOT/insert"
+    if bash build.sh; then
+        print_success "Built insert/catalog_importer"
+        print_success "Built insert/lightcurve_importer"
+        print_success "Built insert/check_candidates"
+        print_success "Built insert/crossmatch"
+    else
+        print_warning "insert/build.sh failed"
+        BUILD_OK=false
+    fi
+
+    cd "$PROJECT_ROOT"
+    if [[ "$BUILD_OK" == "true" ]]; then
+        print_success "C++ components built successfully"
+    else
+        print_warning "Some C++ builds failed, but continuing..."
+        print_info "You can manually build later with: cd web && ./build.sh && cd ../insert && ./build.sh"
     fi
 else
     print_header "Step 6: Skipping C++ Build"
@@ -591,10 +607,11 @@ else
     VERIFY_OK=false
 fi
 
-# Check models
-print_step "Checking models..."
+# Check hierarchical models
+print_step "Checking hierarchical models..."
+HIER_MODEL_DIR="$MODELS_DIR/hierarchical_unlimited"
 for model_file in "${MODEL_FILES[@]}"; do
-    if [ -f "$MODELS_DIR/$model_file" ]; then
+    if [ -f "$HIER_MODEL_DIR/$model_file" ]; then
         print_success "Model: $model_file"
     else
         print_error "Model missing: $model_file"
@@ -608,19 +625,23 @@ if [[ "$SKIP_CONDA" != "true" ]]; then
     eval "$(conda shell.bash hook)"
     conda activate "$CONDA_ENV_NAME" 2>/dev/null
     
-    PYTHON_DEPS=("numpy" "pandas" "taos" "lightgbm" "sklearn" "joblib")
+    PYTHON_DEPS=("numpy" "pandas" "taos" "lightgbm" "sklearn" "joblib" "onnxruntime")
     for dep in "${PYTHON_DEPS[@]}"; do
         if python -c "import $dep" 2>/dev/null; then
             print_success "Python: $dep"
         else
-            print_warning "Python: $dep (not found)"
+            if [ "$dep" = "onnxruntime" ]; then
+                print_warning "Python: $dep (not found — classification will fall back to sklearn)"
+            else
+                print_warning "Python: $dep (not found)"
+            fi
         fi
     done
 fi
 
 # Check C++ binaries
 print_step "Checking C++ binaries..."
-BINARIES=("web/web_api" "insert/catalog_importer" "insert/lightcurve_importer")
+BINARIES=("web/web_api" "insert/catalog_importer" "insert/lightcurve_importer" "insert/check_candidates" "insert/crossmatch")
 for bin in "${BINARIES[@]}"; do
     if [ -f "$PROJECT_ROOT/$bin" ] && [ -x "$PROJECT_ROOT/$bin" ]; then
         print_success "Binary: $bin"

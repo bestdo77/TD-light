@@ -11,8 +11,7 @@
         "host": "0.0.0.0"
     },
     "classification": {
-        "model_path": "../models/lgbm_111w_model.pkl",
-        "metadata_path": "../models/metadata.pkl",
+        "model_dir": "../models/hierarchical_unlimited",
         "confidence_threshold": 0.8,
         "update_database": true
     },

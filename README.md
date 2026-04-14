@@ -14,7 +14,7 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 |-------|------------|-------------|
 | **Database** | TDengine 3.4+ | High-performance time-series database (user-mode) |
 | **Backend** | C++17 | HTTP server, HEALPix spatial indexing |
-| **Classification** | Python + LightGBM | feets feature extraction + machine learning |
+| **Classification** | Python + LightGBM + ONNX Runtime | feets feature extraction + accelerated inference |
 | **Frontend** | HTML/JS | Three.js 3D, Chart.js visualization |
 
 ---
@@ -27,9 +27,10 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 |  **Region Search** | Batch query by RA/DEC range |
 |  **Light Curve Visualization** | Interactive charts for time-series photometry |
 |  **Intelligent Classification** | Automated variable star classification using LightGBM |
-| 🤖 **Auto Classification** | Automatically detect and classify new objects in batches |
+| **Auto Classification** | Automatically detect and classify new objects in batches |
+| **Catalog Disagreement Detection** | Identifies 560 high-confidence catalog-disagreement candidates for follow-up verification |
 |  **Data Import** | One-click CSV data import via web interface |
-| 🌍 **3D Celestial Sphere** | WebGL-rendered 3D visualization |
+| **3D Celestial Sphere** | WebGL-rendered 3D visualization |
 
 ---
 
@@ -83,10 +84,11 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
    - Invokes Python classification scripts via `system()`
    - Invokes C++ importers via `system()`
 
-3. **Classification Module (classify_pipeline.py)**
+3. **Classification Module (classify_pipeline.py / auto_classify.py)**
    - Called by web_api as a subprocess
    - Extracts light curve features using feets library
-   - Classifies using pre-trained LightGBM model
+   - Uses a **hierarchical LightGBM predictor** (4-level, 7 sub-models) with ONNX Runtime acceleration (~3.7× faster than native sklearn, no GPU required)
+   - Falls back to sklearn automatically if ONNX Runtime is not installed
    - Automatically writes high-confidence results back to TDengine
 
 4. **Data Importers (catalog_importer / lightcurve_importer)**
@@ -164,7 +166,7 @@ conda create -n tdlight python=3.10 -y
 conda activate tdlight
 
 # Install Python dependencies
-pip install numpy pandas scikit-learn lightgbm taospy feets
+pip install numpy pandas scikit-learn lightgbm taospy feets onnxruntime
 ```
 
 ### 4. Edit Configuration File
@@ -321,6 +323,18 @@ Batch query by RA/DEC range:
 
 ## Classification Functions
 
+### Inference Acceleration
+
+Classification uses **ONNX Runtime** to accelerate the LightGBM model inference:
+
+| Backend | 5,000 samples | Throughput | Note |
+|---------|--------------|------------|------|
+| sklearn (1 thread) | ~8,300 ms | ~600 samp/s | Original baseline |
+| sklearn (8 threads) | ~2,000 ms | ~2,500 samp/s | Multi-threaded |
+| **ONNX Runtime (8 threads)** | **~400 ms** | **~12,500 samp/s** | **Default, 3.7× faster** |
+
+The system automatically selects the best available backend. If `onnxruntime` is not installed, it falls back to sklearn with no code changes needed.
+
 ### Manual Classification Workflow
 
 1. Select objects to classify
@@ -328,7 +342,7 @@ Batch query by RA/DEC range:
 3. System automatically:
    - Extracts light curves from database
    - Uses feets to extract 15 astronomical features
-   - LightGBM model predicts variable star type
+   - LightGBM model predicts variable star type (via ONNX Runtime)
    - Results above threshold are written back to database
 
 ### Automatic Classification
@@ -375,12 +389,12 @@ System supports automatic detection of light curves requiring classification, fu
 
 **Supported Features**:
 
-- 🔌 **Decoupled Design**: Detection program independent from importer, can be triggered manually anytime
-- ⏸️ **Interruptible**: Stop anytime, saves current progress
-- 🔄 **Resume Support**: Click "Continue" to resume from interruption point
-- 📊 **Real-time Progress**: SSE pushes batch progress
-- 🔧 **Configurable Batch Size**: Default 5000, adjustable
-- 🗄️ **Multi-database Support**: Independent queue and history files per database
+- **Decoupled Design**: Detection program independent from importer, can be triggered manually anytime
+- **Interruptible**: Stop anytime, saves current progress
+- **Resume Support**: Click "Continue" to resume from interruption point
+- **Real-time Progress**: SSE pushes batch progress
+- **Configurable Batch Size**: Default 5000, adjustable
+- **Multi-database Support**: Independent queue and history files per database
 
 ### Confidence Threshold
 
@@ -405,18 +419,21 @@ TDlight/
 │   └── build.sh         # Build script
 │
 ├── class/               # Classification module
-│   ├── classify_pipeline.py  # Manual classification pipeline
-│   └── auto_classify.py      # Automatic classification script
+│   ├── classify_pipeline.py    # Manual classification pipeline
+│   ├── auto_classify.py        # Automatic classification script
+│   └── hierarchical_predictor.py  # Hierarchical LightGBM predictor (ONNX/sklearn)
 │
 ├── insert/              # Data import and detection
 │   ├── catalog_importer.cpp      # Catalog import
 │   ├── lightcurve_importer.cpp   # Light curve import
 │   ├── check_candidates.cpp      # Auto-classify candidate detection
+│   ├── crossmatch.cpp            # Catalog cross-match utility
 │   └── build.sh
 │
-├── models/              # Pre-trained models (auto-downloaded)
-│   ├── lgbm_111w_model.pkl
-│   └── metadata.pkl
+├── models/              # Pre-trained hierarchical models (auto-downloaded)
+│   └── hierarchical_unlimited/
+│       ├── *.pkl / *.onnx      # 7 sub-models (4-level tree)
+│       └── label_encoders.pkl
 │
 ├── libs/                # C++ runtime libraries
 ├── include/             # C++ header files
@@ -521,7 +538,8 @@ The following files are not included in the repository due to their large size. 
 
 | File | Size | How to Obtain |
 |------|------|---------------|
-| `models/lgbm_111w_model.pkl` | ~250MB | Auto-downloaded during installation |
+| `models/hierarchical_unlimited/*.pkl` | ~350MB total | Auto-downloaded during installation |
+| `models/hierarchical_unlimited/*.onnx` | ~280MB total | Auto-downloaded during installation |
 | `data/` | - | Users provide their own astronomical data |
 | TDengine | ~500MB | Auto-downloaded during installation |
 
@@ -562,6 +580,7 @@ If you use this software, please cite HEALPix:
 - [HEALPix](https://healpix.sourceforge.net/) - Hierarchical Equal Area isoLatitude Pixelization
 - [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
 - [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
+- [ONNX Runtime](https://onnxruntime.ai/) - High-Performance Inference Engine
 - [Three.js](https://threejs.org/) - WebGL 3D Rendering
 - [Chart.js](https://www.chartjs.org/) - Chart Visualization
 

@@ -34,7 +34,7 @@ if command -v conda &> /dev/null; then
     eval "$(conda shell.bash hook)" 2>/dev/null
     if conda env list | grep -q "^$CONDA_ENV_NAME "; then
         conda activate "$CONDA_ENV_NAME" 2>/dev/null
-        echo -e "${GREEN}[✓] Conda environment: $CONDA_ENV_NAME${NC}"
+        echo -e "${GREEN}[OK] Conda environment: $CONDA_ENV_NAME${NC}"
     else
         echo -e "${YELLOW}[!] Conda env '$CONDA_ENV_NAME' not found, using system Python${NC}"
     fi
@@ -56,13 +56,13 @@ if ! pgrep -x taosd > /dev/null; then
     sleep 2
     
     if pgrep -x taosd > /dev/null; then
-        echo -e "${GREEN}[✓] TDengine started${NC}"
+        echo -e "${GREEN}[OK] TDengine started${NC}"
     else
         echo -e "${YELLOW}[!] Failed to start TDengine${NC}"
         exit 1
     fi
 else
-    echo -e "${GREEN}[✓] TDengine running${NC}"
+    echo -e "${GREEN}[OK] TDengine running${NC}"
 fi
 
 # Kill old web_api if exists
@@ -84,7 +84,7 @@ sleep 2
 
 # Check if started
 if kill -0 $WEB_PID 2>/dev/null; then
-    echo -e "${GREEN}[✓] Web server started (PID: $WEB_PID)${NC}"
+    echo -e "${GREEN}[OK] Web server started (PID: $WEB_PID)${NC}"
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "  Open: ${GREEN}http://localhost:5001${NC}"

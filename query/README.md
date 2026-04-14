@@ -219,13 +219,13 @@ cd /mnt/nvme/home/yxh/code/TDengine-test
 ### Console Output
 
 ```
-🎯 Cone Search
+Cone Search
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Center: RA=180.000000°, DEC=30.000000°
   Radius: 0.1°
   HEALPix pixels: 12
 
-📊 Query Statistics
+Query Statistics
   HEALPix filter: 150 records
   Angular distance filter: 42 records (exact match)
   Query time: 5.23 ms

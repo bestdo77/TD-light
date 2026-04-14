@@ -42,5 +42,12 @@ g++ -std=c++17 -O3 check_candidates.cpp -o check_candidates \
     -ltaos -lpthread \
     -Wl,-rpath,"$LIBS_DIR"
 
+echo "Compiling crossmatch..."
+g++ -std=c++17 -O3 crossmatch.cpp -o crossmatch \
+    -I"$INCLUDE_DIR" \
+    -L"$LIBS_DIR" \
+    -ltaos -lhealpix_cxx -lsharp -lcfitsio -lpthread \
+    -Wl,-rpath,"$LIBS_DIR"
+
 echo "Compilation complete"
-chmod +x catalog_importer lightcurve_importer check_candidates
+chmod +x catalog_importer lightcurve_importer check_candidates crossmatch

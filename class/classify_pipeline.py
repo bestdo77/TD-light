@@ -15,9 +15,15 @@ import json
 import time
 import argparse
 import warnings
+import multiprocessing as mp
+from functools import partial
 from datetime import datetime
+from hierarchical_predictor import load_hierarchical_predictor
 
 warnings.filterwarnings('ignore')
+
+# Number of parallel workers for feature extraction
+N_WORKERS = max(1, min(mp.cpu_count() - 1, 8))
 
 CONFIG_FILE = "../config.json"
 PROGRESS_FILE = "/tmp/class_progress.json"
@@ -27,13 +33,12 @@ DB_HOST = "localhost"
 DB_PORT = 6030
 DB_NAME = "gaiadr2_lc"
 SUPER_TABLE = "sensor_data"
-MODEL_PATH = "../models/lgbm_111w_model.pkl"
-METADATA_PATH = "../models/metadata.pkl"
+MODEL_DIR = "../models/hierarchical_unlimited"
 CONFIDENCE_THRESHOLD = 0.95
 UPDATE_DATABASE = True
 
 def load_config():
-    global DB_HOST, DB_PORT, DB_NAME, MODEL_PATH, METADATA_PATH, CONFIDENCE_THRESHOLD, UPDATE_DATABASE
+    global DB_HOST, DB_PORT, DB_NAME, MODEL_DIR, CONFIDENCE_THRESHOLD, UPDATE_DATABASE
     
     if not os.path.exists(CONFIG_FILE):
         return
@@ -50,8 +55,7 @@ def load_config():
         
         if 'classification' in config:
             cls = config['classification']
-            MODEL_PATH = cls.get('model_path', MODEL_PATH)
-            METADATA_PATH = cls.get('metadata_path', METADATA_PATH)
+            MODEL_DIR = cls.get('model_dir', MODEL_DIR)
             CONFIDENCE_THRESHOLD = cls.get('confidence_threshold', CONFIDENCE_THRESHOLD)
             UPDATE_DATABASE = cls.get('update_database', UPDATE_DATABASE)
             
@@ -113,6 +117,13 @@ class TDengineNativeClient:
         
     def connect(self):
         try:
+            # Set config dir before connecting (for non-default TDengine installations)
+            config_dir = os.environ.get('TAOS_CFG_DIR', '')
+            if config_dir:
+                try:
+                    taos.taos_options(taos.TaosOption.ConfigDir, config_dir)
+                except Exception:
+                    pass
             self.conn = taos.connect(
                 host=self.host, 
                 user=self.user, 
@@ -194,6 +205,18 @@ def extract_features(fs, t, mag, err):
         return None
 
 
+def _extract_worker(args):
+    """Worker function for parallel feature extraction.
+    Creates its own FeatureSpace to avoid pickling issues."""
+    source_id, t, mag, err = args
+    try:
+        fs = feets.FeatureSpace(data=['time', 'magnitude', 'error'], only=SELECTED_FEATURES)
+        feats = extract_features(fs, t, mag, err)
+        return source_id, feats
+    except Exception:
+        return source_id, None
+
+
 def update_tdengine_class(client, db_name, super_table, source_id, new_class, healpix_id=None):
     table_name = ""
     if healpix_id is not None and int(healpix_id) != 0:
@@ -223,23 +246,12 @@ def update_tdengine_class(client, db_name, super_table, source_id, new_class, he
 
 
 def run_web_mode(input_file, output_file, db_name, host, port, threshold):
-    update_progress(2, "Loading model...", "extract")
+    update_progress(2, "Loading hierarchical model...", "extract")
     
-    if not os.path.exists(MODEL_PATH):
-        update_progress(0, "Model file not found", "error")
+    if not os.path.isdir(MODEL_DIR):
+        update_progress(0, f"Model directory not found: {MODEL_DIR}", "error")
         return 1
-    model = joblib.load(MODEL_PATH)
-    
-    model_dir = os.path.dirname(MODEL_PATH)
-    metadata_path = os.path.join(model_dir, 'metadata.pkl')
-    
-    if os.path.exists(metadata_path):
-        with open(metadata_path, 'rb') as f:
-            metadata = pickle.load(f)
-        class_map = metadata.get('class_map', {c: i for i, c in enumerate(ALL_CLASSES)})
-        idx_to_class = {v: k for k, v in class_map.items()}
-    else:
-        idx_to_class = {i: c for i, c in enumerate(ALL_CLASSES)}
+    predictor = load_hierarchical_predictor(MODEL_DIR, n_threads=N_WORKERS)
 
     update_progress(4, "Initializing feature extractor...", "extract")
     fs = feets.FeatureSpace(data=['time', 'magnitude', 'error'], only=SELECTED_FEATURES)
@@ -302,23 +314,28 @@ def run_web_mode(input_file, output_file, db_name, host, port, threshold):
         update_progress(0, "No lightcurve data fetched", "error")
         return 1
     
-    # Stage 2: Extract features (33% - 66%)
+    # Stage 2: Extract features in PARALLEL (33% - 66%)
     features_data = {}
     feat_count = 0
     lc_ids = list(lightcurves.keys())
     lc_total = len(lc_ids)
     
+    # Prepare worker arguments
+    worker_args = [(sid, lightcurves[sid][0], lightcurves[sid][1], lightcurves[sid][2])
+                   for sid in lc_ids]
+    
+    n_workers = min(N_WORKERS, lc_total)
+    update_progress(33, f"Extracting features ({n_workers} workers, {lc_total} objects)...", "feature")
+    
+    # Sequential extraction (avoids multiprocessing Pool cleanup hangs with feets/taos)
     for i, source_id in enumerate(lc_ids):
         if check_stop():
             return 0
-        
         t, mag, err = lightcurves[source_id]
         feats = extract_features(fs, t, mag, err)
-        
         if feats is not None:
             features_data[source_id] = feats
             feat_count += 1
-        
         pct = 33 + int(33 * (i + 1) / lc_total)
         update_progress(pct, f"Extracting features: {i+1}/{lc_total}, Success {feat_count}", "feature")
     
@@ -326,11 +343,25 @@ def run_web_mode(input_file, output_file, db_name, host, port, threshold):
         update_progress(0, "No features extracted", "error")
         return 1
     
-    # Stage 3: Classify (66% - 95%)
+    # Stage 3: Classify — BATCH hierarchical inference (66% - 95%)
     results = []
     feat_ids = list(features_data.keys())
     feat_total = len(feat_ids)
     updated_count = 0
+    
+    # Build lookup for samples
+    sample_map = {s['source_id']: s for s in samples}
+    
+    # Batch predict all features at once (hierarchical model)
+    update_progress(66, f"Hierarchical inference ({feat_total} objects, backend={predictor.backend})...", "classify")
+    X_batch = np.array([features_data[sid] for sid in feat_ids], dtype=np.float32)
+    t_infer = time.time()
+    all_labels, all_confs = predictor.predict(X_batch)
+    infer_ms = (time.time() - t_infer) * 1000
+    print(f"[INFO] Batch inference: {feat_total} samples in {infer_ms:.0f} ms "
+          f"({infer_ms/feat_total*1000:.0f} μs/sample, backend={predictor.backend})")
+    
+    update_progress(80, f"Writing results ({feat_total} objects)...", "classify")
     
     client = TDengineNativeClient(host, port, db_name=db_name)
     if not client.connect():
@@ -342,16 +373,10 @@ def run_web_mode(input_file, output_file, db_name, host, port, threshold):
             client.close()
             return 0
         
-        sample = next((s for s in samples if s['source_id'] == source_id), {})
+        sample = sample_map.get(source_id, {})
         
-        feats = features_data[source_id]
-        feats_arr = np.array(feats).reshape(1, -1)
-        probs = model.predict_proba(feats_arr)[0]
-        max_idx = np.argmax(probs)
-        
-        pred_idx = model.classes_[max_idx] if hasattr(model, 'classes_') else max_idx
-        pred_class = idx_to_class.get(pred_idx, str(pred_idx))
-        confidence = float(probs[max_idx])
+        pred_class = all_labels[i]
+        confidence = float(all_confs[i])
         
         result = {
             'source_id': str(source_id),
@@ -376,8 +401,8 @@ def run_web_mode(input_file, output_file, db_name, host, port, threshold):
         
         results.append(result)
         
-        pct = 66 + int(29 * (i + 1) / feat_total)
-        update_progress(pct, f"Classifying: {i+1}/{feat_total}, Updated {updated_count}", "classify")
+        pct = 80 + int(15 * (i + 1) / feat_total)
+        update_progress(pct, f"Writing: {i+1}/{feat_total}, Updated {updated_count}", "classify")
     
     client.close()
     
@@ -393,7 +418,7 @@ def run_web_mode(input_file, output_file, db_name, host, port, threshold):
         "high_confidence_count": high_conf_count,
         "updated_count": updated_count,
         "threshold": threshold,
-        "model": "lgbm_111w_15features_tuned"
+        "model": "hierarchical_lgbm_unlimited"
     }
     with open(output_file, 'w') as f:
         json.dump(output_data, f, indent=2)

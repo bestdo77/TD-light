@@ -186,7 +186,15 @@ window.performConeSearch = async function(appendMode = false) {
                 showToast(tMsg('msg_found_objects', data.objects.length), 'success');
             }
             updateObjectList();
-            plotSkyMap(currentObjects, appendMode ? null : {ra, dec, radius});
+            if (appendMode) {
+                // 追加模式：添加新区域，保留旧区域
+                allSearchRegions.push({type: 'cone', ra, dec, radius});
+                plotSkyMap(currentObjects, null, allSearchRegions);
+            } else {
+                // 新检索：重置区域列表
+                allSearchRegions = [{type: 'cone', ra, dec, radius}];
+                plotSkyMap(currentObjects, {ra, dec, radius}, allSearchRegions);
+            }
         } else {
             showToast(tMsg('msg_no_objects_found'), 'error');
         }
@@ -275,6 +283,8 @@ window.clearObjectList = function() {
     currentObjects = [];
     selectedObjects = [];
     highlightedObjectId = null;
+    allSearchRegions = [];
+    currentConeRegion = null;
     updateObjectList();
     
     const placeholder = document.getElementById('skyMapPlaceholder');
@@ -329,7 +339,14 @@ window.performRectSearch = async function(appendMode = false) {
                 showToast(tMsg('msg_found_objects', data.objects.length), 'success');
             }
             updateObjectList();
-            plotSkyMap(currentObjects, null);
+            const rectRegion = {type: 'rect', raMin, raMax, decMin, decMax};
+            if (appendMode) {
+                allSearchRegions.push(rectRegion);
+                plotSkyMap(currentObjects, null, allSearchRegions);
+            } else {
+                allSearchRegions = [rectRegion];
+                plotSkyMap(currentObjects, null, allSearchRegions);
+            }
         } else {
             showToast(tMsg('msg_no_objects_found'), 'error');
         }
@@ -634,6 +651,7 @@ function getClassColor(cls) {
 
 let highlightedObjectId = null;
 let currentConeRegion = null;
+let allSearchRegions = [];  // 存储所有检索区域边缘
 
 window.toggleSkyMapMode = function() {
     is3DMode = !is3DMode;
@@ -642,8 +660,9 @@ window.toggleSkyMapMode = function() {
     }
 };
 
-function plotSkyMap(objects, coneRegion = null) {
+function plotSkyMap(objects, coneRegion = null, regions = null) {
     currentConeRegion = coneRegion;
+    if (regions !== null) allSearchRegions = regions;
     const placeholder = document.getElementById('skyMapPlaceholder');
     if (placeholder) placeholder.style.display = 'none';
     
@@ -658,6 +677,13 @@ function plotSkyMap3D(objects, coneRegion) {
     const container = document.getElementById('skyMapContainer');
     if (!container) return;
     
+    // 如果 Three.js 未加载，回退到 2D 模式
+    if (typeof THREE === 'undefined') {
+        console.warn('Three.js not loaded, falling back to 2D mode');
+        plotSkyMap2D(objects, coneRegion);
+        return;
+    }
+    
     const canvas = document.getElementById('skyMapCanvas');
     if (canvas) canvas.style.display = 'none';
     
@@ -666,7 +692,7 @@ function plotSkyMap3D(objects, coneRegion) {
     else {
         skyMap3DEl = document.createElement('div');
         skyMap3DEl.id = 'skyMap3D';
-        skyMap3DEl.style.cssText = 'width: 100%; height: 100%;';
+        skyMap3DEl.style.cssText = 'width: 100%; height: 100%; background: #ffffff;';
         container.appendChild(skyMap3DEl);
     }
     skyMap3DEl.style.display = 'block';
@@ -675,12 +701,13 @@ function plotSkyMap3D(objects, coneRegion) {
     const height = skyMap3DEl.clientHeight || 480;
     
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a1628);
+    scene.background = new THREE.Color(0xffffff);
     
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.set(0, 0, 100);
     
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setClearColor(0xffffff, 1);
     renderer.setSize(width, height);
     skyMap3DEl.appendChild(renderer.domElement);
     
@@ -689,7 +716,7 @@ function plotSkyMap3D(objects, coneRegion) {
     controls.dampingFactor = 0.05;
     
     const sphereGeom = new THREE.SphereGeometry(50, 32, 32);
-    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x1e3a5f, wireframe: true });
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0xd1d5db, wireframe: true });
     scene.add(new THREE.Mesh(sphereGeom, sphereMat));
     
     const equatorPoints = [];
@@ -698,7 +725,7 @@ function plotSkyMap3D(objects, coneRegion) {
         equatorPoints.push(new THREE.Vector3(50 * Math.cos(theta), 0, 50 * Math.sin(theta)));
     }
     const equatorGeom = new THREE.BufferGeometry().setFromPoints(equatorPoints);
-    scene.add(new THREE.Line(equatorGeom, new THREE.LineBasicMaterial({ color: 0x4f46e5 })));
+    scene.add(new THREE.Line(equatorGeom, new THREE.LineBasicMaterial({ color: 0x6366f1 })));
     
     const objectMarkers = [];
     objects.forEach(obj => {
@@ -720,24 +747,48 @@ function plotSkyMap3D(objects, coneRegion) {
         objectMarkers.push(marker);
     });
     
-    if (coneRegion) {
-        const centerPhi = (90 - coneRegion.dec) * Math.PI / 180;
-        const centerTheta = coneRegion.ra * Math.PI / 180;
-        const radiusRad = coneRegion.radius * Math.PI / 180;
-        
-        const circlePoints = [];
-        for (let i = 0; i <= 64; i++) {
-            const angle = (i / 64) * 2 * Math.PI;
-            const phi = centerPhi + radiusRad * Math.cos(angle);
-            const theta = centerTheta + radiusRad * Math.sin(angle) / Math.sin(centerPhi);
-            const x = 51.5 * Math.sin(phi) * Math.cos(theta);
-            const y = 51.5 * Math.cos(phi);
-            const z = 51.5 * Math.sin(phi) * Math.sin(theta);
-            circlePoints.push(new THREE.Vector3(x, y, z));
+    // 绘制所有检索区域边缘
+    const regionColors = [0xf59e0b, 0x06b6d4, 0xa855f7, 0xef4444, 0x22c55e, 0x3b82f6];
+    allSearchRegions.forEach((region, idx) => {
+        const color = regionColors[idx % regionColors.length];
+        if (region.type === 'cone') {
+            const centerPhi = (90 - region.dec) * Math.PI / 180;
+            const centerTheta = region.ra * Math.PI / 180;
+            const radiusRad = region.radius * Math.PI / 180;
+            
+            const circlePoints = [];
+            for (let i = 0; i <= 64; i++) {
+                const angle = (i / 64) * 2 * Math.PI;
+                const phi = centerPhi + radiusRad * Math.cos(angle);
+                const theta = centerTheta + radiusRad * Math.sin(angle) / Math.sin(centerPhi);
+                const x = 51.5 * Math.sin(phi) * Math.cos(theta);
+                const y = 51.5 * Math.cos(phi);
+                const z = 51.5 * Math.sin(phi) * Math.sin(theta);
+                circlePoints.push(new THREE.Vector3(x, y, z));
+            }
+            const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+            scene.add(new THREE.Line(circleGeom, new THREE.LineBasicMaterial({ color })));
+        } else if (region.type === 'rect') {
+            const corners = [
+                {ra: region.raMin, dec: region.decMin},
+                {ra: region.raMax, dec: region.decMin},
+                {ra: region.raMax, dec: region.decMax},
+                {ra: region.raMin, dec: region.decMax},
+                {ra: region.raMin, dec: region.decMin}
+            ];
+            const rectPoints = corners.map(c => {
+                const phi = (90 - c.dec) * Math.PI / 180;
+                const theta = c.ra * Math.PI / 180;
+                return new THREE.Vector3(
+                    51.5 * Math.sin(phi) * Math.cos(theta),
+                    51.5 * Math.cos(phi),
+                    51.5 * Math.sin(phi) * Math.sin(theta)
+                );
+            });
+            const rectGeom = new THREE.BufferGeometry().setFromPoints(rectPoints);
+            scene.add(new THREE.Line(rectGeom, new THREE.LineBasicMaterial({ color })));
         }
-        const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
-        scene.add(new THREE.Line(circleGeom, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 2 })));
-    }
+    });
     
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -787,7 +838,7 @@ function plotSkyMap2D(objects, coneRegion) {
     const width = canvas.width;
     const height = canvas.height;
     
-    ctx.fillStyle = '#0a1628';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
     
     const margin = 40;
@@ -801,7 +852,7 @@ function plotSkyMap2D(objects, coneRegion) {
     const minDec = Math.min(...decs) - 0.5;
     const maxDec = Math.max(...decs) + 0.5;
     
-    ctx.strokeStyle = '#1e3a5f';
+    ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 10; i++) {
         const ra = minRa + (maxRa - minRa) * i / 10;
@@ -811,7 +862,7 @@ function plotSkyMap2D(objects, coneRegion) {
         ctx.lineTo(x, margin + plotHeight);
         ctx.stroke();
         
-        ctx.fillStyle = '#64748b';
+        ctx.fillStyle = '#6b7280';
         ctx.font = '11px sans-serif';
         ctx.fillText(ra.toFixed(1) + '°', x - 15, margin + plotHeight + 18);
     }
@@ -823,25 +874,40 @@ function plotSkyMap2D(objects, coneRegion) {
         ctx.lineTo(margin + plotWidth, y);
         ctx.stroke();
         
-        ctx.fillStyle = '#64748b';
+        ctx.fillStyle = '#6b7280';
         ctx.fillText(dec.toFixed(1) + '°', 5, y + 4);
     }
     
-    ctx.strokeStyle = '#475569';
+    ctx.strokeStyle = '#9ca3af';
     ctx.lineWidth = 1;
     ctx.strokeRect(margin, margin, plotWidth, plotHeight);
     
-    if (coneRegion) {
-        const cx = margin + (coneRegion.ra - minRa) / (maxRa - minRa) * plotWidth;
-        const cy = margin + (maxDec - coneRegion.dec) / (maxDec - minDec) * plotHeight;
-        const r = (coneRegion.radius / (maxRa - minRa)) * plotWidth;
-        
-        ctx.strokeStyle = '#f59e0b';
+    // 绘制所有检索区域边缘
+    const regionColors2D = ['#f59e0b', '#06b6d4', '#a855f7', '#ef4444', '#22c55e', '#3b82f6'];
+    allSearchRegions.forEach((region, idx) => {
+        const color = regionColors2D[idx % regionColors2D.length];
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-        ctx.stroke();
-    }
+        ctx.setLineDash(idx === allSearchRegions.length - 1 ? [] : [6, 4]);  // 最新的实线，旧的虚线
+        
+        if (region.type === 'cone') {
+            const cx = margin + (region.ra - minRa) / (maxRa - minRa) * plotWidth;
+            const cy = margin + (maxDec - region.dec) / (maxDec - minDec) * plotHeight;
+            const r = (region.radius / (maxRa - minRa)) * plotWidth;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.stroke();
+        } else if (region.type === 'rect') {
+            const x1 = margin + (region.raMin - minRa) / (maxRa - minRa) * plotWidth;
+            const x2 = margin + (region.raMax - minRa) / (maxRa - minRa) * plotWidth;
+            const y1 = margin + (maxDec - region.decMax) / (maxDec - minDec) * plotHeight;
+            const y2 = margin + (maxDec - region.decMin) / (maxDec - minDec) * plotHeight;
+            ctx.beginPath();
+            ctx.rect(x1, y1, x2 - x1, y2 - y1);
+            ctx.stroke();
+        }
+    });
+    ctx.setLineDash([]);  // 恢复实线
     
     const objectPoints = [];
     objects.forEach(obj => {

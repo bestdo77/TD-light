@@ -20,10 +20,15 @@ import json
 import time
 import argparse
 import warnings
+import multiprocessing as mp
 from datetime import datetime
 from pathlib import Path
+from hierarchical_predictor import load_hierarchical_predictor
 
 warnings.filterwarnings('ignore')
+
+# Number of parallel workers for feature extraction
+N_WORKERS = max(1, min(mp.cpu_count() - 1, 8))
 
 # ==================== Configuration ====================
 CONFIG_FILE = "../config.json"
@@ -35,8 +40,7 @@ STOP_FILE = "/tmp/auto_classify_stop"
 DB_HOST = "localhost"
 DB_PORT = 6030
 DB_NAME = "gaiadr2_lc"
-MODEL_PATH = "../models/lgbm_111w_model.pkl"
-METADATA_PATH = "../models/metadata.pkl"
+MODEL_DIR = "../models/hierarchical_unlimited"
 CONFIDENCE_THRESHOLD = 0.95
 UPDATE_DATABASE = True
 BATCH_SIZE = 5000
@@ -53,7 +57,7 @@ ALL_CLASSES = ['Non-var', 'ROT', 'EA', 'EW', 'CEP', 'DSCT', 'RRAB', 'RRC', 'M', 
 
 def load_config():
     """Load configuration file"""
-    global DB_HOST, DB_PORT, DB_NAME, MODEL_PATH, METADATA_PATH, CONFIDENCE_THRESHOLD, UPDATE_DATABASE
+    global DB_HOST, DB_PORT, DB_NAME, MODEL_DIR, CONFIDENCE_THRESHOLD, UPDATE_DATABASE
     
     if not os.path.exists(CONFIG_FILE):
         return
@@ -70,8 +74,7 @@ def load_config():
         
         if 'classification' in config:
             cls = config['classification']
-            MODEL_PATH = cls.get('model_path', MODEL_PATH)
-            METADATA_PATH = cls.get('metadata_path', METADATA_PATH)
+            MODEL_DIR = cls.get('model_dir', MODEL_DIR)
             CONFIDENCE_THRESHOLD = cls.get('confidence_threshold', CONFIDENCE_THRESHOLD)
             UPDATE_DATABASE = cls.get('update_database', UPDATE_DATABASE)
             
@@ -153,11 +156,14 @@ class TDengineClient:
         
     def connect(self):
         try:
+            config_dir = os.environ.get('TAOS_CFG_DIR', '')
+            if config_dir:
+                taos.taos_options(taos.TaosOption.ConfigDir, config_dir)
             self.conn = taos.connect(
-                host=self.host, 
-                user=self.user, 
-                password=self.password, 
-                database=self.db_name, 
+                host=self.host,
+                user=self.user,
+                password=self.password,
+                database=self.db_name,
                 port=self.port
             )
             self.cursor = self.conn.cursor()
@@ -236,6 +242,17 @@ def extract_features(fs, t, mag, err):
         return None
 
 
+def _extract_worker(args):
+    """Worker function for parallel feature extraction."""
+    source_id, t, mag, err = args
+    try:
+        fs = feets.FeatureSpace(data=['time', 'magnitude', 'error'], only=SELECTED_FEATURES)
+        feats = extract_features(fs, t, mag, err)
+        return source_id, feats
+    except Exception:
+        return source_id, None
+
+
 def update_class_in_db(client, source_id, new_class, healpix_id=None):
     """Update classification result in database"""
     table_name = ""
@@ -258,77 +275,127 @@ def update_class_in_db(client, source_id, new_class, healpix_id=None):
     return client.execute(sql)
 
 
-def process_batch(client, fs, model, idx_to_class, candidates, batch_idx, total_batches, threshold):
-    """Process a batch of candidates"""
+def process_batch(client, fs, predictor, candidates, batch_idx, total_batches, threshold):
+    """Process a batch of candidates with parallel feature extraction.
+    
+    Pipeline: 
+      1. Fetch light curves (sequential, DB-bound)
+      2. Extract features (PARALLEL, CPU-bound - bottleneck)
+      3. Classify + write back (hierarchical BATCH inference)
+    """
     results = []
     total = len(candidates)
     updated_count = 0
     
+    # ---- Stage 1: Fetch light curves (sequential) ----
+    lightcurves = {}
+    cand_map = {}
     for i, cand in enumerate(candidates):
         if check_stop():
             return results, updated_count, True
         
         source_id = cand['source_id']
-        healpix_id = cand.get('healpix_id', 0)
-        ra = cand.get('ra', 0)
-        dec = cand.get('dec', 0)
-        
-        # Fetch light curve
         lc_data = fetch_lightcurve(client, source_id)
-        if lc_data is None:
-            continue
+        if lc_data is not None:
+            lightcurves[source_id] = lc_data
+            cand_map[source_id] = cand
         
-        t, mag, err = lc_data
+        batch_progress = (i + 1) / total * 0.3  # 0-30% of batch
+        overall_progress = ((batch_idx - 1) + batch_progress) / total_batches * 100
+        update_progress(
+            int(overall_progress),
+            f"Batch {batch_idx}/{total_batches}: Fetching {i+1}/{total}",
+            "running",
+            {"current_batch": batch_idx, "total_batches": total_batches,
+             "batch_progress": int(batch_progress * 100), "processed": i + 1,
+             "batch_total": total, "updated": updated_count}
+        )
+    
+    if not lightcurves:
+        return results, updated_count, False
+    
+    # ---- Stage 2: Extract features (PARALLEL) ----
+    worker_args = [(sid, lc[0], lc[1], lc[2]) for sid, lc in lightcurves.items()]
+    features_data = {}
+    n_workers = min(N_WORKERS, len(worker_args))
+    
+    if n_workers > 1 and len(worker_args) >= 4:
+        ctx = mp.get_context('spawn')
+        with ctx.Pool(processes=n_workers) as pool:
+            for j, (sid, feats) in enumerate(pool.imap_unordered(_extract_worker, worker_args)):
+                if check_stop():
+                    pool.terminate()
+                    return results, updated_count, True
+                if feats is not None:
+                    features_data[sid] = feats
+                
+                batch_progress = 0.3 + (j + 1) / len(worker_args) * 0.5  # 30-80%
+                overall_progress = ((batch_idx - 1) + batch_progress) / total_batches * 100
+                update_progress(
+                    int(overall_progress),
+                    f"Batch {batch_idx}/{total_batches}: Features {j+1}/{len(worker_args)} ({n_workers}w)",
+                    "running",
+                    {"current_batch": batch_idx, "total_batches": total_batches,
+                     "batch_progress": int(batch_progress * 100),
+                     "processed": j + 1, "batch_total": len(worker_args),
+                     "updated": updated_count}
+                )
+    else:
+        for j, (sid, t, mag, err) in enumerate(worker_args):
+            if check_stop():
+                return results, updated_count, True
+            feats = extract_features(fs, t, mag, err)
+            if feats is not None:
+                features_data[sid] = feats
+    
+    # ---- Stage 3: Batch classify + write back (hierarchical model) ----
+    feat_ids = list(features_data.keys())
+    
+    # Batch hierarchical inference — all features at once
+    X_batch = np.array([features_data[sid] for sid in feat_ids], dtype=np.float32)
+    t_infer = time.time()
+    all_labels, all_confs = predictor.predict(X_batch)
+    infer_ms = (time.time() - t_infer) * 1000
+    print(f"[INFO] Batch {batch_idx}: {len(feat_ids)} samples inferred in {infer_ms:.0f} ms "
+          f"({infer_ms/max(len(feat_ids),1)*1000:.0f} μs/sample, backend={predictor.backend})")
+    
+    for j, source_id in enumerate(feat_ids):
+        if check_stop():
+            return results, updated_count, True
         
-        # Extract features
-        feats = extract_features(fs, t, mag, err)
-        if feats is None:
-            continue
-        
-        # Classify
-        feats_arr = np.array(feats).reshape(1, -1)
-        probs = model.predict_proba(feats_arr)[0]
-        max_idx = np.argmax(probs)
-        
-        pred_idx = model.classes_[max_idx] if hasattr(model, 'classes_') else max_idx
-        pred_class = idx_to_class.get(pred_idx, str(pred_idx))
-        confidence = float(probs[max_idx])
+        cand = cand_map[source_id]
+        pred_class = all_labels[j]
+        confidence = float(all_confs[j])
         
         result = {
             'source_id': str(source_id),
-            'healpix_id': healpix_id,
-            'ra': ra,
-            'dec': dec,
+            'healpix_id': cand.get('healpix_id', 0),
+            'ra': cand.get('ra', 0),
+            'dec': cand.get('dec', 0),
             'prediction': pred_class,
             'confidence': round(confidence, 4),
-            'data_points': len(t),
+            'data_points': len(lightcurves[source_id][0]),
             'reason': cand.get('reason', 'unknown'),
             'updated': False
         }
         
-        # Update database for high confidence predictions
         if confidence >= threshold and UPDATE_DATABASE:
-            if update_class_in_db(client, source_id, pred_class, healpix_id):
+            if update_class_in_db(client, source_id, pred_class, cand.get('healpix_id', 0)):
                 result['updated'] = True
                 updated_count += 1
         
         results.append(result)
         
-        # Update progress
-        batch_progress = (i + 1) / total
+        batch_progress = 0.8 + (j + 1) / len(feat_ids) * 0.2  # 80-100%
         overall_progress = ((batch_idx - 1) + batch_progress) / total_batches * 100
         update_progress(
             int(overall_progress),
-            f"Batch {batch_idx}/{total_batches}: Processing {i+1}/{total}",
+            f"Batch {batch_idx}/{total_batches}: Write {j+1}/{len(feat_ids)}, Updated {updated_count}",
             "running",
-            {
-                "current_batch": batch_idx,
-                "total_batches": total_batches,
-                "batch_progress": int(batch_progress * 100),
-                "processed": i + 1,
-                "batch_total": total,
-                "updated": updated_count
-            }
+            {"current_batch": batch_idx, "total_batches": total_batches,
+             "batch_progress": int(batch_progress * 100),
+             "processed": j + 1, "batch_total": len(feat_ids),
+             "updated": updated_count}
         )
     
     return results, updated_count, False
@@ -343,24 +410,13 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
         update_progress(0, "Candidate file not found", "error")
         return 1
     
-    # Load model
-    update_progress(1, "Loading model...", "running")
-    if not os.path.exists(MODEL_PATH):
-        update_progress(0, "Model file not found", "error")
+    # Load hierarchical model
+    update_progress(1, "Loading hierarchical model...", "running")
+    if not os.path.isdir(MODEL_DIR):
+        update_progress(0, f"Model directory not found: {MODEL_DIR}", "error")
         return 1
     
-    model = joblib.load(MODEL_PATH)
-    
-    # Load class mapping
-    model_dir = os.path.dirname(MODEL_PATH)
-    metadata_path = os.path.join(model_dir, 'metadata.pkl')
-    if os.path.exists(metadata_path):
-        with open(metadata_path, 'rb') as f:
-            metadata = pickle.load(f)
-        class_map = metadata.get('class_map', {c: i for i, c in enumerate(ALL_CLASSES)})
-        idx_to_class = {v: k for k, v in class_map.items()}
-    else:
-        idx_to_class = {i: c for i, c in enumerate(ALL_CLASSES)}
+    predictor = load_hierarchical_predictor(MODEL_DIR, n_threads=N_WORKERS)
     
     # Initialize feature extractor
     update_progress(2, "Initializing feature extractor...", "running")
@@ -418,7 +474,7 @@ def run_auto_classify(candidate_file, db_name, threshold, resume=False):
         print(f"[INFO] Processing batch {batch_idx + 1}/{total_batches} ({len(batch)} items)")
         
         results, updated, should_stop = process_batch(
-            client, fs, model, idx_to_class, batch,
+            client, fs, predictor, batch,
             batch_idx + 1, total_batches, threshold
         )
         
