@@ -6,6 +6,10 @@ A light curve management and classification system for time-domain astronomy, po
 
 Supports efficient storage, fast retrieval, and intelligent classification of large-scale astronomical time-series data.
 
+> **Paper Highlight:** `cross_validate_560_results.csv` in this repository records the **560 high-confidence catalog-disagreement candidates** identified by our classifier for follow-up verification.
+>
+> **Pre-trained Models:** [HuggingFace — bestdo77/Lightcurve_lgbm_111w_15_model](https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model)
+
 ---
 
 ## Tech Stack

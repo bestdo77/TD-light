@@ -6,6 +6,10 @@
 
 支持大规模天文时序数据的高效存储、快速检索和智能分类。
 
+> **论文亮点：** 本仓库中的 `cross_validate_560_results.csv` 记录了分类器识别出的 **560 个高置信度星表不一致候选体**，可供后续验证跟进。
+>
+> **预训练模型：** [HuggingFace — bestdo77/Lightcurve_lgbm_111w_15_model](https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model)
+
 ---
 
 ## 技术栈
