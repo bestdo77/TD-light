@@ -2,49 +2,43 @@ English | [中文](README_CN.md)
 
 # TDlight Web Service
 
-## Overview
+A complete web service for light curve data management and classification.
 
-Provides a complete web service for light curve data management and classification.
-
-### Core Features
+## Core Features
 
 | Feature | Description |
 |---------|-------------|
-| Object List | Browse objects in database |
-| Light Curves | View time-series observation data and visualization |
+| Object List | Browse objects in the database |
+| Light Curves | View time-series observation data and plots |
 | Spatial Search | Cone search and region search |
 | Sky Map | 3D visualization of object distribution |
-| Intelligent Classification | Real-time classification using LightGBM model |
-| Data Import | Batch import of CSV data |
-| Database Management | Multi-database switching |
-
----
+| Intelligent Classification | Real-time classification with LightGBM |
+| Data Import | Batch CSV import via web UI |
+| Database Management | Switch between multiple databases |
 
 ## Quick Start
 
-### 1. Start Service
+### 1. Build & Start
 
 ```bash
-cd TDlight
-./start_env.sh
-# After entering container
-cd /app/web
+cd web
+./build.sh
 ./web_api
 ```
 
-### 2. Access Interface
+### 2. Open Browser
 
-Open browser: **http://localhost:5001**
+**http://localhost:5001**
 
 ---
 
 ## User Guide
 
-### Object Browsing
+### Browse Objects
 
-1. Object list loads automatically when page opens
-2. Click any object to view light curve
-3. Use search box to search by source_id
+1. The object list loads automatically when the page opens
+2. Click any object to view its light curve
+3. Use the search box to filter by `source_id`
 
 ### Spatial Search
 
@@ -53,63 +47,46 @@ Open browser: **http://localhost:5001**
 - Click "Search"
 
 **Region Search** (rectangular area):
-- Enter min/max values for RA/DEC
+- Enter min/max values for RA and DEC
 - Click "Search"
 
 ### Object Classification
 
-1. Select classification method:
-   - **Random Classification**: Randomly select objects from database
-   - **Visible Objects**: Classify objects in current list
-2. Set confidence threshold (only results above threshold are written to database)
+1. Choose a classification mode:
+   - **Random Classification**: randomly select objects from the database
+   - **Visible Objects**: classify objects currently in the list
+2. Set the confidence threshold (only results above the threshold are written to the database)
 3. Click "Start Classification"
-4. View real-time progress and results
+4. Watch real-time progress and results
 
 ### Data Import
 
-Note: **Before importing light curves, prepare**:
-1. Light curve CSV directory (one file per object)
-2. Coordinate file (containing RA/DEC for all objects)
+**Before importing light curves, prepare**:
+1. A directory of light curve CSV files (one file per object)
+2. A coordinate file containing RA/DEC for all objects
 
 **Steps**:
-1. Switch to "Data Import" tab
-2. Enter database name
-3. Enter CSV directory path (container path)
-4. Enter coordinate file path (container path)
+1. Switch to the "Data Import" tab
+2. Enter the database name
+3. Enter the CSV directory path
+4. Enter the coordinate file path
 5. Click "Start Import"
-6. View real-time import progress and logs
+6. Watch real-time import progress and logs
 
-**Path Notes**:
-- If data is on host machine, mount to container via `--bind`
-- e.g., host `/data/gaia` mounted as `/app/data/gaia`
+### Configuration
 
-### Configuration Management
-
-In "System Settings" tab you can:
+In the "System Settings" tab you can:
 - Modify database connection parameters
-- Modify classification model path
-- Modify Python environment path
+- Modify the classification model path
+- Modify the Python executable path
 - Click "Save Config" to save locally
-- Click "Apply to Backend" to make configuration effective
+- Click "Apply to Backend" to reload the configuration
 
 ---
 
 ## Classification Model
 
-Uses **LightGBM model**, supports 10-class variable star classification:
-
-| Code | Type | Description |
-|------|------|-------------|
-| 0 | Non-var | Non-variable star |
-| 1 | ROT | Rotational variable |
-| 2 | EA | Algol-type eclipsing binary |
-| 3 | EW | W Ursae Majoris-type eclipsing binary |
-| 4 | CEP | Cepheid variable |
-| 5 | DSCT | Delta Scuti variable |
-| 6 | RRAB | RR Lyrae type ab |
-| 7 | RRC | RR Lyrae type c |
-| 8 | M | Mira variable |
-| 9 | SR | Semi-regular variable |
+Uses a **hierarchical LightGBM predictor** (ONNX Runtime by default, auto-fallback to sklearn).
 
 ### Features Used (15)
 
@@ -123,55 +100,9 @@ LinearTrend, Freq1_harmonics_amplitude_0, AndersonDarling, MaxSlope, StetsonK
 
 ## API Endpoints
 
-### Object Query
+See the main [README.md](../README.md) for the complete API reference.
 
-| Endpoint | Method | Parameters | Description |
-|----------|--------|------------|-------------|
-| `/api/objects` | GET | `limit` | Get object list |
-| `/api/object/{table_name}` | GET | - | Get object details |
-| `/api/object_by_id` | GET | `id` | Query by source_id |
-
-### Light Curve
-
-| Endpoint | Method | Parameters | Description |
-|----------|--------|------------|-------------|
-| `/api/lightcurve/{table_name}` | GET | `time_start`, `time_end` | Get observation data |
-
-### Spatial Search
-
-| Endpoint | Method | Parameters | Description |
-|----------|--------|------------|-------------|
-| `/api/cone_search` | GET | `ra`, `dec`, `radius` | Cone search |
-| `/api/region_search` | GET | `ra_min/max`, `dec_min/max` | Region search |
-| `/api/sky_map` | GET | `limit` | Sky map data |
-
-### Classification
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/classify` | POST | Classify specified objects (SSE stream) |
-| `/api/classify/stop` | POST | Stop classification task |
-
-### Data Import
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/import/start` | POST | Start import task |
-| `/api/import/stop` | POST | Stop import task |
-| `/api/import/stream` | GET | Import progress (SSE stream) |
-
-### Database Management
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/databases` | GET | Get database list |
-| `/api/databases/drop` | POST | Delete database |
-| `/api/config` | GET | Get current configuration |
-| `/api/config/reload` | GET | Reload configuration |
-
----
-
-## API Examples
+Common examples:
 
 ### Cone Search
 
@@ -185,27 +116,27 @@ curl "http://localhost:5001/api/cone_search?ra=180&dec=30&radius=0.1"
 curl "http://localhost:5001/api/lightcurve/t_5870536848431465216"
 ```
 
-### Classify Object
+### Start Classification
 
 ```bash
-curl -X POST "http://localhost:5001/api/classify" \
+curl -X POST "http://localhost:5001/api/classify_objects" \
   -H "Content-Type: application/json" \
   -d '{"objects": [{"source_id": "5870536848431465216"}], "threshold": 0.8}'
 ```
 
 ---
 
-## Compilation
+## Build
 
-If you need to modify backend code:
+If you modify the backend:
 
 ```bash
-cd TDlight/web
+cd web
 ./build.sh
 ```
 
-Compilation requires:
-- g++ (C++17 support)
+Requirements:
+- g++ with C++17 support
 - TDengine client library
 - HEALPix C++ library
 
@@ -220,7 +151,8 @@ web/
 ├── build.sh              # Build script
 ├── index.html            # Frontend HTML
 ├── app.js                # Frontend JavaScript
-├── classify_pipeline.py  # Python classification script
+├── lang.js               # i18n
+├── sse_test.html         # SSE test page
 └── README.md             # This document
 ```
 
@@ -230,21 +162,20 @@ web/
 
 ### 1. TDengine Connection Failed
 
-- Confirm taosd service is running
-- Confirm running inside Apptainer container
-- Check database configuration in config.json
+- Confirm `taosd` is running: `systemctl --user status taosd`
+- Check `config.json` for correct database settings
 
 ### 2. Classification Failed
 
-- Confirm model files exist (models/*.pkl)
-- Confirm Python environment path is correct
-- Check paths.python in config.json
+- Confirm model files exist in `models/hierarchical_unlimited/`
+- Confirm the `tdlight` conda environment is set up
+- Check `paths.python` in `config.json`
 
 ### 3. Data Import Not Responding
 
-- Confirm path is container path
-- Check if coordinate file exists
-- Check error messages in /tmp/import.log
+- Confirm the path exists and is readable
+- Check if the coordinate file exists
+- Check error messages in the web UI logs
 
 ### 4. Port Already in Use
 
@@ -260,10 +191,10 @@ kill $(lsof -t -i:5001)
 
 | Operation | Typical Time |
 |-----------|--------------|
-| Object list (200 items) | 50-200 ms |
-| Single light curve | 10-50 ms |
-| Cone search (r=0.1°) | 20-100 ms |
-| Single object classification | 400-600 ms |
+| Object list (200 items) | 50–200 ms |
+| Single light curve | 10–50 ms |
+| Cone search (r=0.1°) | 20–100 ms |
+| Single object classification | 400–600 ms |
 | Batch classification (per item) | ~50 ms |
 
 ---

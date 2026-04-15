@@ -2,13 +2,35 @@
 
 # TDlight
 
-基于 TDengine 时序数据库的天文光变曲线管理与分类系统。
-
-支持大规模天文时序数据的高效存储、快速检索和智能分类。
-
+> **基于 TDengine 时序数据库的天文光变曲线管理与分类系统。**
+>
+> 支持大规模天文时序数据的高效存储、快速检索和智能分类。
+>
 > **论文亮点：** 本仓库中的 `cross_validate_560_results.csv` 记录了分类器识别出的 **560 个高置信度星表不一致候选体**，可供后续验证跟进。
 >
 > **预训练模型：** [HuggingFace — bestdo77/Lightcurve_lgbm_111w_15_model](https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model)
+
+---
+
+## 快速开始
+
+```bash
+git clone https://github.com/bestdo77/TD-light.git
+cd TD-light
+./install.sh
+```
+
+然后打开浏览器访问 [http://localhost:5001](http://localhost:5001)。
+
+详细的安装选项和手动步骤请参见 [INSTALL.md](INSTALL.md)。
+
+---
+
+## Web 界面
+
+![TDlight Web 界面](assets/tdlight_web_interface.png)
+
+*TDlight Web 界面。左侧面板支持在三维天球上进行交互式锥形检索，高亮显示搜索边界；右侧面板展示多波段（G/BP/RP）光变曲线及选中目标的分类元数据和统计信息。*
 
 ---
 
@@ -16,10 +38,10 @@
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **数据库** | TDengine 3.4+ | 高性能时序数据库（用户模式安装） |
-| **后端** | C++17 | HTTP 服务器、HEALPix 空间索引 |
-| **分类** | Python + LightGBM + ONNX Runtime | feets 特征提取 + 加速推理 |
-| **前端** | HTML/JS | Three.js 3D、Chart.js 图表 |
+| **数据库** | TDengine 3.4+ | 高性能时序数据库（用户模式安装，无需 sudo） |
+| **后端** | C++17 | 原生 HTTP 服务器、HEALPix 空间索引 |
+| **机器学习** | Python + LightGBM + ONNX Runtime | `feets` 特征提取 + 加速推理 |
+| **前端** | HTML/JS | Three.js 3D 天球、Chart.js 交互式图表 |
 
 ---
 
@@ -27,17 +49,20 @@
 
 | 功能 | 说明 |
 |------|------|
-|  **锥形检索** | 以天球坐标为中心，按半径搜索天体 |
-|  **矩形检索** | 按 RA/DEC 范围批量查询 |
-|  **光变曲线可视化** | 交互式图表展示时序测光数据 |
-|  **智能分类** | 基于 LightGBM 的变星自动分类 |
-| **自动分类** | 导入时自动检测待分类天体，分批后台处理 |
-|  **数据导入** | Web 界面一键导入 CSV 格式数据 |
-| **3D 天球** | WebGL 渲染的三维天球可视化 |
+| **锥形检索** | 以天球坐标为中心、按半径搜索天体，HEALPix 索引加速 |
+| **矩形检索** | 按 RA/DEC 范围批量查询 |
+| **光变曲线可视化** | 交互式图表展示时序测光数据 |
+| **智能分类** | 基于分层 LightGBM 预测器的变星自动分类 |
+| **自动分类** | 自动检测新导入或数据增长的天体，分批后台处理 |
+| **星表不一致检测** | 识别出 560 个高置信度星表不一致候选体，供后续验证 |
+| **数据导入** | Web 界面一键导入，或命令行多线程高性能导入 |
+| **3D 天球** | WebGL 渲染的交互式三维天球 |
 
 ---
 
 ## 系统架构
+
+![TDlight 系统架构](assets/tdlight_figure1.png)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -74,163 +99,79 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 组件连接说明
+### 组件说明
 
-1. **前端 (index.html + app.js)**
+1. **前端 (`index.html` + `app.js`)**
    - 使用 Fetch API 调用后端 REST 接口
-   - 使用 Server-Sent Events (SSE) 接收分类/导入进度
-   - Three.js 渲染 3D 天球，Chart.js 绘制光变曲线
+   - 通过 Server-Sent Events (SSE) 接收分类/导入进度
+   - Three.js 渲染 3D 天球，Chart.js 绘制交互式光变曲线
 
-2. **后端 (web_api.cpp)**
+2. **后端 (`web_api.cpp`)**
    - 纯 C++ 实现的 HTTP 服务器
-   - 使用 HEALPix 进行天球像素化加速检索
-   - 通过 `system()` 调用 Python 分类脚本
-   - 通过 `system()` 调用 C++ 导入器
+   - 使用 HEALPix 进行天球像素化，加速空间检索
+   - 通过子进程调用 Python 分类脚本和 C++ 导入器
 
-3. **分类模块 (classify_pipeline.py)**
-   - 由 web_api 通过子进程调用
-   - 使用 feets 库提取光变曲线特征
-   - 使用 ONNX Runtime 加速 LightGBM 推理（比原生 sklearn 快约 3.7 倍，无需 GPU）
-   - 未安装 ONNX Runtime 时自动回退到 sklearn，无需修改代码
+3. **分类模块 (`classify_pipeline.py` / `auto_classify.py`)**
+   - 分层 LightGBM 预测器（4 层树结构，7 个子模型）
+   - 使用 `feets` 库提取天文特征
+   - 默认使用 ONNX Runtime（比 sklearn 快约 3.7 倍）；未安装时自动回退到 sklearn
    - 高置信度结果自动写回 TDengine
 
-4. **数据导入器 (catalog_importer / lightcurve_importer)**
-   - 独立 C++ 程序，支持多线程并行导入
-   - Web 导入默认: 16 线程，32 VGroups（兼容小配置）
-   - 命令行可自定义: `--threads N --vgroups N`
-   - 前端通过 SSE 实时显示进度
-
----
-
-## 运行环境
-
-### 环境概述
-
-本系统使用 **Conda 管理 Python 环境** + **TDengine 用户模式安装**（无需 root 权限）：
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     宿主机 (Linux)                           │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │              Conda 环境 (tdlight / feets)               │ │
-│  │   Python 3.10 + numpy + lightgbm + feets + taospy       │ │
-│  │   运行: web_api, classify_pipeline.py, importers        │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                              │                               │
-│                              ▼                               │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │         TDengine 3.4+ (用户模式安装，~/taos)             │ │
-│  │   taosd 服务 (systemctl --user)                         │ │
-│  │   监听端口: 6030                                         │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 系统要求
-
-| 组件 | 版本 | 说明 |
-|------|------|------|
-| 操作系统 | Ubuntu 20.04+ | 仅支持 Linux |
-| Conda | Miniconda/Anaconda | Python 环境管理 |
-| TDengine | 3.4.0+ | 用户模式安装，无需 sudo |
-| GCC | 7+ | C++ 编译 |
+4. **数据导入器 (`catalog_importer` / `lightcurve_importer`)**
+   - 独立的 C++ 多线程并行导入程序
+   - Web 导入默认：16 线程、32 VGroups
+   - 命令行支持自定义 `--threads` 和 `--vgroups`
 
 ---
 
 ## 安装步骤
 
-### 1. 克隆项目
+### 一键安装（推荐）
 
 ```bash
-git clone https://github.com/yourname/TDlight.git
-cd TDlight
+git clone https://github.com/bestdo77/TD-light.git
+cd TD-light
+./install.sh
 ```
 
-### 2. 安装 TDengine（用户模式，无需 sudo）
+`install.sh` 会依次完成：
+1. 检查依赖（conda、g++、wget/curl）
+2. 下载并用户模式安装 TDengine 3.4+（`~/taos`，无需 sudo）
+3. 从 HuggingFace 下载预训练模型
+4. 创建 `tdlight` conda 环境并安装 Python 依赖
+5. 编译所有 C++ 组件（`web_api`、导入器、查询工具）
+6. 配置 TDengine 并创建默认数据库（`gaiadr2_lc`）
+7. 解压测试数据（如有）
+
+### 启动服务
 
 ```bash
-# 下载 TDengine 3.4.0.0
-wget https://downloads.tdengine.com/tdengine-tsdb-oss/3.4.0.0/tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
-
-# 解压并安装
-tar -xzf tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
-cd tdengine-tsdb-oss-3.4.0.0
-./install.sh -e no
-
-# 安装完成后，TDengine 位于 ~/taos
-```
-
-### 3. 创建 Conda 环境
-
-```bash
-# 创建 Python 环境
-conda create -n tdlight python=3.10 -y
+# 激活环境
 conda activate tdlight
+source start_env.sh
 
-# 安装 Python 依赖
-pip install numpy pandas scikit-learn lightgbm taospy feets onnxruntime
-```
-
-### 4. 编辑配置文件
-
-```bash
-cp config.json.example config.json
-# 修改 python 路径指向你的 feets 环境
-vim config.json
-```
-
-主要配置项：
-
-```json
-{
-    "database": {
-        "host": "localhost",
-        "port": 6030,
-        "name": "your_database_name"
-    },
-    "paths": {
-        "python": "/path/to/conda/envs/feets/bin/python"
-    }
-}
-```
-
-### 5. 编译 C++ 组件
-
-```bash
-cd web
-./build.sh
-
-cd ../insert
-./build.sh
-```
-
-### 6. 启动服务
-
-```bash
-# 启动 TDengine 服务
+# 启动 TDengine（如未运行）
 systemctl --user start taosd
 
 # 启动 Web 服务
-conda activate tdlight
-source start_env.sh  # 设置环境变量
-cd web
-./web_api
+cd web && ./web_api
 ```
 
-### 7. 访问
+打开浏览器访问 [http://localhost:5001](http://localhost:5001)。
 
-打开浏览器访问：**http://localhost:5001**
+### 手动安装
+
+如需分步手动安装，请参阅 [INSTALL.md](INSTALL.md)。
 
 ---
 
 ## 数据导入
 
-### 导入方式
+### Web 界面导入
 
-**Web 界面**：点击 "数据导入" 标签页（默认 16 线程，32 VGroups）
+点击网页上的 **数据导入** 标签页（默认 16 线程、32 VGroups）。
 
-**命令行**（可自定义参数）：
+### 命令行导入
 
 ```bash
 # 星表导入
@@ -238,8 +179,8 @@ cd web
     --catalogs /path/to/catalogs \
     --coords /path/to/coordinates.csv \
     --db gaiadr2_lc \
-    --threads 64 \      # 线程数（默认 16）
-    --vgroups 128       # VGroups 数（默认 32）
+    --threads 64 \
+    --vgroups 128
 
 # 光变曲线导入
 ./insert/lightcurve_importer \
@@ -259,35 +200,27 @@ cd web
 
 ### 必需文件
 
-导入光变曲线数据时，**必须同时提供坐标文件**：
+导入光变曲线时，**必须同时提供坐标文件**：
 
 | 文件 | 说明 |
 |------|------|
-| 光变曲线目录 | 包含每个天体的 CSV 文件 |
-| 坐标文件 | 包含所有天体的 RA/DEC 坐标 |
+| 光变曲线目录 | 每个天体一个 CSV 文件（文件名需包含 `source_id`） |
+| 坐标文件 | 一个 CSV 文件，包含所有天体的 `source_id,ra,dec` |
 
-坐标文件用于：
-- 计算 HEALPix 索引（加速空间检索）
-- 为每个天体创建子表时设置 TAGS
+坐标文件用于计算 HEALPix 索引和创建子表时设置 TAGS。
 
 ### 数据格式
 
-**光变曲线 CSV**（每个天体一个文件，文件名包含 source_id）：
-
+**光变曲线 CSV**（每个天体一个文件）：
 ```csv
 source_id,band,time,mag,mag_error,flux,flux_error
 12345678,G,2015.5,15.234,0.002,1234.5,2.5
-12345678,G,2015.6,15.238,0.003,1230.2,3.1
-...
 ```
 
-**坐标文件 CSV**（一个文件，包含所有天体）：
-
+**坐标文件 CSV**（所有天体一个文件）：
 ```csv
 source_id,ra,dec
 12345678,180.123,-45.678
-12345679,181.456,-44.321
-...
 ```
 
 ### 数据库行为
@@ -300,9 +233,7 @@ source_id,ra,dec
 | 插入新数据 | **追加**到表中 |
 | 时间戳冲突 | **覆盖**旧记录 |
 
->  **VGroups 限制**：配置文件 `supportVnodes=256`，每个数据库使用 128 VGroups，可同时运行约 2 个数据库。
-> 这意味着系统同时最多支持约 **2 个完整数据库**。
-> 导入前请通过"数据库管理"删除不需要的数据库释放资源。
+> **VGroups 限制**：配置文件 `supportVnodes=256`，每个数据库使用 128 VGroups，系统同时最多支持约 **2 个完整数据库**。导入前请删除不需要的数据库以释放资源。
 
 ---
 
@@ -310,17 +241,13 @@ source_id,ra,dec
 
 ### 锥形检索 (Cone Search)
 
-以指定天球坐标为圆心，按半径搜索：
-
+以指定天球坐标为圆心、按半径搜索：
 - 输入：RA (度), DEC (度), 半径 (角分)
 - 使用 HEALPix 索引加速
 
 ### 矩形检索 (Region Search)
 
-按 RA/DEC 范围批量查询：
-
-- 输入：RA 范围, DEC 范围
-- 适合批量获取区域内天体
+按 RA/DEC 范围批量查询，适合获取区域内的所有天体。
 
 ---
 
@@ -328,81 +255,55 @@ source_id,ra,dec
 
 ### 推理加速
 
-分类使用 **ONNX Runtime** 加速 LightGBM 模型推理：
-
 | 推理后端 | 5,000 样本耗时 | 吞吐量 | 说明 |
 |---------|--------------|--------|------|
-| sklearn（单线程） | ~8,300 ms | ~600 样本/s | 原始基线 |
+| sklearn（单线程） | ~8,300 ms | ~600 样本/s | 基线 |
 | sklearn（8 线程） | ~2,000 ms | ~2,500 样本/s | 多线程 |
-| **ONNX Runtime（8 线程）** | **~400 ms** | **~12,500 样本/s** | **默认后端，快 3.7 倍** |
+| **ONNX Runtime（8 线程）** | **~400 ms** | **~12,500 样本/s** | **默认后端，快约 3.7 倍** |
 
-系统自动选择最优后端。未安装 `onnxruntime` 时自动回退到 sklearn，无需修改任何代码。
+未安装 `onnxruntime` 时自动回退到 sklearn，无需修改代码。
 
 ### 手动分类流程
 
-1. 选择要分类的天体
-2. 点击"开始分类"
+1. 在 Web 界面选择要分类的天体
+2. 点击 **开始分类**
 3. 系统自动：
    - 从数据库提取光变曲线
-   - 使用 feets 提取 15 个天文特征
-   - LightGBM 模型预测变星类型（通过 ONNX Runtime 加速）
-   - 高于阈值的结果写回数据库
+   - 使用 `feets` 提取 15 个天文特征
+   - 分层 LightGBM 预测器推断变星类型（ONNX Runtime 加速）
+   - 高置信度结果写回数据库
 
 ### 自动分类功能
 
-系统支持自动检测需要分类的光变曲线，与导入器完全解耦：
+自动分类模块与导入器完全解耦：
 
 | 检测条件 | 说明 |
 |----------|------|
-| **首次出现** | 历史记录文件中没有该 source_id |
+| **首次出现** | 历史记录文件中没有该 `source_id` |
 | **数据增长 >20%** | 数据点数比历史记录增长超过 20% |
 
-**工作流程**：
+**工作流程：**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  1. 数据导入（任意导入器）                                        │
-│     catalog_importer / lightcurve_importer                      │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. 点击"查询"按钮，触发 check_candidates 程序                    │
-│     - 查询数据库中所有天体的数据点数                               │
-│     - 与历史文件 lc_counts_<db>.csv 对比                         │
-│     - 新增或增长>20% 的天体写入 auto_classify_queue_<db>.csv      │
-│     - 新数据替换历史文件                                          │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. 点击"开始"，启动 auto_classify.py 后台任务                    │
-│     - 分批处理（默认 5000 条/批）                                  │
-│     - 使用 feets 提取特征 + LightGBM 预测                         │
-│     - 高置信度结果自动写回数据库                                   │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. 通过任意导入器导入数据
+2. 点击 **查询** 按钮运行 `check_candidates`：
+   - 查询所有天体的数据点数
+   - 与历史文件 `data/lc_counts_<db>.csv` 对比
+   - 新增或增长 >20% 的天体写入 `data/auto_classify_queue_<db>.csv`
+   - 更新历史记录文件
+3. 点击 **开始** 启动 `auto_classify.py`：
+   - 分批处理（默认 5000 条/批）
+   - `feets` 特征提取 + LightGBM 预测
+   - 高置信度结果自动写回数据库
 
-**生成的文件**：
-
-| 文件 | 说明 |
-|------|------|
-| `data/lc_counts_<db>.csv` | 历史点数记录，用于下次比对 |
-| `data/auto_classify_queue_<db>.csv` | 待分类队列 |
-
-**支持特性**：
-
-- **解耦设计**：检测程序独立于导入器，可随时手动触发
-- **可中断**：随时停止，保存当前进度
-- **断点续传**：点击"继续"从中断处恢复
-- **实时进度**：SSE 推送批次进度
-- **可配置批次大小**：默认 5000，可调整
-- **多数据库支持**：每个数据库独立的队列和历史文件
+**特性：**
+- 解耦设计：检测程序独立于导入器，可随时手动触发
+- 可中断、可恢复：点击 **继续** 从中断处恢复
+- 实时进度：SSE 推送批次进度
+- 多数据库支持：每个数据库独立的队列和历史文件
 
 ### 置信度阈值
 
-在"系统设置"中可调整：
-
+在 **系统设置** 中可调整：
 - 高于阈值：自动写回数据库
 - 低于阈值：仅显示，不保存
 
@@ -412,38 +313,43 @@ source_id,ra,dec
 
 ```
 TDlight/
-├── config.json          # 主配置文件
-├── start_env.sh         # 容器启动脚本
+├── config.json              # 主配置文件
+├── start_env.sh             # 环境激活脚本
+├── install.sh               # 一键安装脚本
+├── INSTALL.md               # 详细安装指南
+├── requirements.txt         # Python 依赖
+├── Makefile                 # C++ 编译（install.sh 调用）
 │
-├── web/                 # Web 服务
-│   ├── web_api.cpp      # C++ HTTP 后端
-│   ├── index.html       # 前端页面
-│   ├── app.js           # 前端交互逻辑
-│   └── build.sh         # 编译脚本
+├── web/                     # Web 服务
+│   ├── web_api.cpp          # C++ HTTP 后端
+│   ├── build.sh
+│   └── static/              # 前端资源
 │
-├── class/               # 分类模块
-│   ├── classify_pipeline.py  # 手动分类流水线
-│   ├── auto_classify.py      # 自动分类脚本
-│   └── onnx_predictor.py     # ONNX Runtime 推理引擎（自动回退 sklearn）
+├── class/                   # 分类模块
+│   ├── classify_pipeline.py
+│   ├── auto_classify.py
+│   └── hierarchical_predictor.py
 │
-├── insert/              # 数据导入与检测
-│   ├── catalog_importer.cpp      # 星表导入
-│   ├── lightcurve_importer.cpp   # 光变曲线导入
-│   ├── check_candidates.cpp      # 自动分类候选检测
+├── insert/                  # 数据导入器
+│   ├── catalog_importer.cpp
+│   ├── lightcurve_importer.cpp
+│   ├── check_candidates.cpp
+│   ├── crossmatch.cpp
 │   └── build.sh
 │
-├── models/              # 预训练模型（自动下载）
-│   ├── lgbm_111w_model.pkl   # LightGBM sklearn 包装器
-│   ├── lgbm_111w_model.onnx  # ONNX 格式模型（推理快 3.7 倍）
-│   └── metadata.pkl
+├── query/                   # 查询工具
+│   └── optimized_query.cpp
 │
-├── libs/                # C++ 运行时库
-├── include/             # C++ 头文件
-├── config/              # TDengine 客户端配置
-├── data/                # 数据文件目录
-│   ├── lc_counts_<db>.csv           # 历史点数记录
-│   └── auto_classify_queue_<db>.csv # 待分类队列
-└── runtime/             # 运行时日志
+├── models/                  # 预训练模型（自动下载）
+│   ├── hierarchical_unlimited/   # 7 个子模型（pkl + onnx）
+│   └── lgbm_111w_model.*         # 旧版扁平模型
+│
+├── testdata/                # 测试数据（install.sh 自动解压）
+├── libs/                    # C++ 运行时库
+├── include/                 # C++ 头文件
+├── config/                  # TDengine 客户端配置
+├── data/                    # 运行时数据文件（点数记录、队列）
+└── runtime/                 # 运行时日志
 ```
 
 ---
@@ -460,7 +366,7 @@ TDlight/
 | `/api/import/start` | POST | 启动数据导入 |
 | `/api/import/stream` | GET (SSE) | 导入进度流 |
 | `/api/import/stop` | POST | 停止导入 |
-| `/api/auto_classify/check` | POST | 触发候选检测（对比历史，生成队列）|
+| `/api/auto_classify/check` | POST | 触发候选检测 |
 | `/api/auto_classify/candidates` | GET | 获取待分类天体数量 |
 | `/api/auto_classify/start` | POST | 启动自动分类任务 |
 | `/api/auto_classify/stop` | POST | 停止自动分类 |
@@ -478,43 +384,40 @@ TDlight/
 ### 编译报错：找不到头文件
 
 确保在对应目录执行编译：
-
 ```bash
 cd web && ./build.sh
-cd insert && ./build.sh
+cd ../insert && ./build.sh
 ```
 
 ### 运行时找不到 .so 文件
 
-设置库路径：
-
 ```bash
+source start_env.sh
+# 或手动设置：
 export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 ```
 
 ### 无法连接 TDengine
 
-1. 确认容器内 taosd 已启动
+1. 确认 `taosd` 已运行：`systemctl --user status taosd`
 2. 检查 `config.json` 中的数据库配置
-3. 检查端口 6041 是否可访问
+3. 检查端口 6030 是否可访问
 
 ### VNodes exhausted 错误
 
 数据库 VGroups 资源耗尽。解决方案：
-
 1. 通过 Web 界面删除不需要的数据库
 2. 或增加 `config/taos_cfg/taos.cfg` 中的 `supportVnodes` 值
 
 ### 分类无结果
 
 1. 确认 `config.json` 中 `python` 路径正确
-2. 确认 feets 环境中依赖完整
+2. 确认 `tdlight` conda 环境中依赖完整
 3. 查看 `class/` 目录下的日志
 
 ### 终端崩溃 / 命令无法执行
 
-如果执行 `source start_env.sh` 后终端崩溃或命令失效：
-
+如果执行 `source start_env.sh` 后终端崩溃：
 ```bash
 # 检查 libs/ 目录是否包含不兼容的系统库
 ls libs/ | grep -E "libstdc|libgcc|libgomp"
@@ -526,32 +429,30 @@ rm -f libs/libstdc++.so* libs/libgcc_s.so* libs/libgomp.so*
 ### 端口 5001 被占用
 
 ```bash
-# 查看占用进程
 lsof -i :5001
-
-# 或更换端口（编辑 web/web_api.cpp 中的 PORT 常量）
+# 或在 web/web_api.cpp 中修改 PORT 常量
 ```
 
 ---
 
 ## 大文件获取
 
-以下文件因体积过大未包含在仓库中，如有需要请联系作者获取：
+以下文件因体积较大未包含在仓库中，`install.sh` 会自动下载：
 
 | 文件 | 大小 | 获取方式 |
 |------|------|----------|
-| `models/lgbm_111w_model.pkl` | ~252MB | 安装时自动下载 |
-| `models/lgbm_111w_model.onnx` | ~182MB | 安装时自动下载 |
+| `models/hierarchical_unlimited/*.pkl` | ~350 MB 总计 | `install.sh` 自动下载 |
+| `models/hierarchical_unlimited/*.onnx` | ~280 MB 总计 | `install.sh` 自动下载 |
 | `data/` | - | 用户自备天文数据 |
-| TDengine | ~500MB | 安装时自动下载 |
+| TDengine | ~500 MB | `install.sh` 自动下载 |
 
-**联系方式**：如需预训练模型/部署相关问题，请联系 3023244355@tju.edu.cn。
+**联系方式**：如需预训练模型或部署相关问题，请联系 3023244355@tju.edu.cn。
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+本项目基于 **MIT License** 开源，详见 [LICENSE](LICENSE) 文件。
 
 ---
 
@@ -585,5 +486,3 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 - [ONNX Runtime](https://onnxruntime.ai/) - 高性能推理引擎
 - [Three.js](https://threejs.org/) - WebGL 3D 渲染
 - [Chart.js](https://www.chartjs.org/) - 图表可视化
-
-

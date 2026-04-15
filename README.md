@@ -2,13 +2,35 @@ English | [中文](README_CN.md)
 
 # TDlight
 
-A light curve management and classification system for time-domain astronomy, powered by TDengine time-series database.
-
-Supports efficient storage, fast retrieval, and intelligent classification of large-scale astronomical time-series data.
-
+> **A light curve management and classification system for time-domain astronomy, powered by TDengine.**
+>
+> Supports efficient storage, fast retrieval, and intelligent classification of large-scale astronomical time-series data.
+>
 > **Paper Highlight:** `cross_validate_560_results.csv` in this repository records the **560 high-confidence catalog-disagreement candidates** identified by our classifier for follow-up verification.
 >
 > **Pre-trained Models:** [HuggingFace — bestdo77/Lightcurve_lgbm_111w_15_model](https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model)
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/bestdo77/TD-light.git
+cd TD-light
+./install.sh
+```
+
+Then open [http://localhost:5001](http://localhost:5001).
+
+For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md).
+
+---
+
+## Web Interface
+
+![TDlight Web Interface](assets/tdlight_web_interface.png)
+
+*The TDlight web interface. The left panel provides interactive spatial querying via cone search on a 3D celestial sphere, with search boundaries highlighted. The right panel displays multi-band light curves (G/BP/RP) with classification metadata and statistical properties for the selected source.*
 
 ---
 
@@ -16,10 +38,10 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 
 | Layer | Technology | Description |
 |-------|------------|-------------|
-| **Database** | TDengine 3.4+ | High-performance time-series database (user-mode) |
-| **Backend** | C++17 | HTTP server, HEALPix spatial indexing |
-| **Classification** | Python + LightGBM + ONNX Runtime | feets feature extraction + accelerated inference |
-| **Frontend** | HTML/JS | Three.js 3D, Chart.js visualization |
+| **Database** | TDengine 3.4+ | High-performance time-series database (user-mode, no sudo) |
+| **Backend** | C++17 | Raw-socket HTTP server, HEALPix spatial indexing |
+| **ML** | Python + LightGBM + ONNX Runtime | `feets` feature extraction + accelerated inference |
+| **Frontend** | HTML/JS | Three.js 3D celestial sphere, Chart.js interactive plots |
 
 ---
 
@@ -27,18 +49,20 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 
 | Feature | Description |
 |---------|-------------|
-|  **Cone Search** | Search objects by celestial coordinates and radius |
-|  **Region Search** | Batch query by RA/DEC range |
-|  **Light Curve Visualization** | Interactive charts for time-series photometry |
-|  **Intelligent Classification** | Automated variable star classification using LightGBM |
-| **Auto Classification** | Automatically detect and classify new objects in batches |
+| **Cone Search** | Search objects by celestial coordinates and radius using HEALPix acceleration |
+| **Region Search** | Batch query by RA/DEC range |
+| **Light Curve Visualization** | Interactive charts for time-series photometry |
+| **Intelligent Classification** | Automated variable-star classification using a hierarchical LightGBM predictor |
+| **Auto Classification** | Detects new or updated objects automatically and classifies them in batches |
 | **Catalog Disagreement Detection** | Identifies 560 high-confidence catalog-disagreement candidates for follow-up verification |
-|  **Data Import** | One-click CSV data import via web interface |
-| **3D Celestial Sphere** | WebGL-rendered 3D visualization |
+| **Data Import** | One-click CSV import via web UI or high-performance multi-threaded CLI |
+| **3D Celestial Sphere** | WebGL-rendered interactive sky visualization |
 
 ---
 
 ## System Architecture
+
+![TDlight System Architecture](assets/tdlight_figure1.png)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -75,163 +99,78 @@ Supports efficient storage, fast retrieval, and intelligent classification of la
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Connections
+### Components
 
-1. **Frontend (index.html + app.js)**
-   - Uses Fetch API to call backend REST endpoints
-   - Receives classification/import progress via Server-Sent Events (SSE)
-   - Three.js renders 3D celestial sphere, Chart.js draws light curves
+1. **Frontend (`index.html` + `app.js`)**
+   - REST API via Fetch, real-time progress via Server-Sent Events (SSE)
+   - Three.js renders the 3D celestial sphere; Chart.js draws interactive light curves
 
-2. **Backend (web_api.cpp)**
-   - Pure C++ HTTP server implementation
-   - Uses HEALPix for celestial sphere pixelization to accelerate searches
-   - Invokes Python classification scripts via `system()`
-   - Invokes C++ importers via `system()`
+2. **Backend (`web_api.cpp`)**
+   - Pure C++ HTTP server
+   - HEALPix sphere pixelization for fast spatial queries
+   - Spawns Python classification scripts and C++ importers via subprocesses
 
-3. **Classification Module (classify_pipeline.py / auto_classify.py)**
-   - Called by web_api as a subprocess
-   - Extracts light curve features using feets library
-   - Uses a **hierarchical LightGBM predictor** (4-level, 7 sub-models) with ONNX Runtime acceleration (~3.7× faster than native sklearn, no GPU required)
-   - Falls back to sklearn automatically if ONNX Runtime is not installed
-   - Automatically writes high-confidence results back to TDengine
+3. **Classification (`classify_pipeline.py` / `auto_classify.py`)**
+   - Hierarchical LightGBM predictor (4-level tree, 7 sub-models)
+   - Feature extraction with `feets`
+   - ONNX Runtime by default (~3.7× faster than sklearn); auto-fallback to sklearn if ONNX is unavailable
+   - High-confidence results written back to TDengine automatically
 
-4. **Data Importers (catalog_importer / lightcurve_importer)**
-   - Standalone C++ programs with multi-threaded parallel import
-   - Web import defaults: 16 threads, 32 VGroups (for compatibility)
-   - Command line customizable: `--threads N --vgroups N`
-   - Frontend displays real-time progress via SSE
-
----
-
-## Runtime Environment
-
-### Environment Overview
-
-This system uses **Conda for Python environment** + **TDengine user-mode installation** (no root required):
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     Host Machine (Linux)                     │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │           Conda Environment (tdlight / feets)           │ │
-│  │   Python 3.10 + numpy + lightgbm + feets + taospy       │ │
-│  │   Runs: web_api, classify_pipeline.py, importers        │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                              │                               │
-│                              ▼                               │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │         TDengine 3.4+ (User-mode install, ~/taos)       │ │
-│  │   taosd service (systemctl --user)                      │ │
-│  │   Listening port: 6030                                  │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### System Requirements
-
-| Component | Version | Description |
-|-----------|---------|-------------|
-| OS | Ubuntu 20.04+ | Linux only |
-| Conda | Miniconda/Anaconda | Python environment management |
-| TDengine | 3.4.0+ | User-mode install, no sudo required |
-| GCC | 7+ | C++ compilation |
+4. **Data Importers (`catalog_importer` / `lightcurve_importer`)**
+   - Standalone multi-threaded C++ programs
+   - Web defaults: 16 threads, 32 VGroups
+   - CLI supports custom `--threads` and `--vgroups`
 
 ---
 
 ## Installation
 
-### 1. Clone the Repository
+### One-Command Install (Recommended)
 
 ```bash
-git clone https://github.com/yourname/TDlight.git
-cd TDlight
+git clone https://github.com/bestdo77/TD-light.git
+cd TD-light
+./install.sh
 ```
 
-### 2. Install TDengine (User Mode, No sudo Required)
+The script will:
+1. Check dependencies (conda, g++, wget/curl)
+2. Download and install TDengine 3.4+ in user mode (`~/taos`)
+3. Download pre-trained models from HuggingFace
+4. Create the `tdlight` conda environment and install Python dependencies
+5. Compile all C++ components (`web_api`, importers, query tools)
+6. Configure TDengine and create the default database (`gaiadr2_lc`)
+7. Extract test data if available
+
+### Start Services
 
 ```bash
-# Download TDengine 3.4.0.0
-wget https://downloads.tdengine.com/tdengine-tsdb-oss/3.4.0.0/tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
-
-# Extract and install
-tar -xzf tdengine-tsdb-oss-3.4.0.0-linux-x64.tar.gz
-cd tdengine-tsdb-oss-3.4.0.0
-./install.sh -e no
-
-# After installation, TDengine is located at ~/taos
-```
-
-### 3. Create Conda Environment
-
-```bash
-# Create Python environment
-conda create -n tdlight python=3.10 -y
+# Activate environment
 conda activate tdlight
+source start_env.sh
 
-# Install Python dependencies
-pip install numpy pandas scikit-learn lightgbm taospy feets onnxruntime
-```
-
-### 4. Edit Configuration File
-
-```bash
-cp config.json.example config.json
-# Modify python path to point to your feets environment
-vim config.json
-```
-
-Main configuration options:
-
-```json
-{
-    "database": {
-        "host": "localhost",
-        "port": 6030,
-        "name": "your_database_name"
-    },
-    "paths": {
-        "python": "/path/to/conda/envs/feets/bin/python"
-    }
-}
-```
-
-### 5. Compile C++ Components
-
-```bash
-cd web
-./build.sh
-
-cd ../insert
-./build.sh
-```
-
-### 6. Start Services
-
-```bash
-# Start TDengine service
+# Start TDengine (if not running)
 systemctl --user start taosd
 
-# Start Web service
-conda activate tdlight
-source start_env.sh  # Set environment variables
-cd web
-./web_api
+# Start the web interface
+cd web && ./web_api
 ```
 
-### 7. Access
+Open [http://localhost:5001](http://localhost:5001).
 
-Open browser and visit: **http://localhost:5001**
+### Manual Installation
+
+If you prefer to install step-by-step, see [INSTALL.md](INSTALL.md).
 
 ---
 
 ## Data Import
 
-### Import Method
+### Web Interface
 
-**Web Interface**: Click "Data Import" tab (defaults: 16 threads, 32 VGroups)
+Click **Data Import** in the web UI (defaults: 16 threads, 32 VGroups).
 
-**Command Line** (customizable parameters):
+### Command Line
 
 ```bash
 # Catalog import
@@ -239,8 +178,8 @@ Open browser and visit: **http://localhost:5001**
     --catalogs /path/to/catalogs \
     --coords /path/to/coordinates.csv \
     --db gaiadr2_lc \
-    --threads 64 \      # Thread count (default: 16)
-    --vgroups 128       # VGroups count (default: 32)
+    --threads 64 \
+    --vgroups 128
 
 # Light curve import
 ./insert/lightcurve_importer \
@@ -260,35 +199,27 @@ Open browser and visit: **http://localhost:5001**
 
 ### Required Files
 
-When importing light curve data, **coordinate file must be provided**:
+When importing light curves, a **coordinate file** must be provided:
 
 | File | Description |
 |------|-------------|
-| Light curve directory | Contains CSV file for each object |
-| Coordinate file | Contains RA/DEC coordinates for all objects |
+| Light curve directory | One CSV per object (filename contains `source_id`) |
+| Coordinate file | Single CSV with `source_id,ra,dec` for all objects |
 
-Coordinate file is used for:
-- Computing HEALPix indices (accelerates spatial search)
-- Setting TAGS when creating sub-tables for each object
+Coordinates are used to compute HEALPix indices and set table TAGS.
 
 ### Data Format
 
-**Light Curve CSV** (one file per object, filename contains source_id):
-
+**Light Curve CSV** (one file per object):
 ```csv
 source_id,band,time,mag,mag_error,flux,flux_error
 12345678,G,2015.5,15.234,0.002,1234.5,2.5
-12345678,G,2015.6,15.238,0.003,1230.2,3.1
-...
 ```
 
-**Coordinate File CSV** (one file containing all objects):
-
+**Coordinate File CSV** (one file for all objects):
 ```csv
 source_id,ra,dec
 12345678,180.123,-45.678
-12345679,181.456,-44.321
-...
 ```
 
 ### Database Behavior
@@ -301,9 +232,7 @@ source_id,ra,dec
 | Insert new data | **Append** to table |
 | Timestamp conflict | **Overwrite** old record |
 
->  **VGroups Limit**: Config file sets `supportVnodes=256`, each database uses 128 VGroups, allowing ~2 databases simultaneously.
-> This means the system supports approximately **2 complete databases** simultaneously.
-> Delete unnecessary databases via "Database Management" before importing to free resources.
+> **VGroups Limit:** `supportVnodes=256` allows ~2 complete databases at once. Delete unnecessary databases before importing to free resources.
 
 ---
 
@@ -311,17 +240,11 @@ source_id,ra,dec
 
 ### Cone Search
 
-Search by celestial coordinates as center with radius:
-
-- Input: RA (degrees), DEC (degrees), Radius (arcmin)
-- Uses HEALPix index for acceleration
+Search by celestial coordinates and radius. Input: RA (°), DEC (°), radius (arcmin). Uses HEALPix index for acceleration.
 
 ### Region Search
 
-Batch query by RA/DEC range:
-
-- Input: RA range, DEC range
-- Suitable for bulk retrieval of objects in a region
+Batch query by RA/DEC range for bulk retrieval of objects in a region.
 
 ---
 
@@ -329,83 +252,46 @@ Batch query by RA/DEC range:
 
 ### Inference Acceleration
 
-Classification uses **ONNX Runtime** to accelerate the LightGBM model inference:
-
 | Backend | 5,000 samples | Throughput | Note |
 |---------|--------------|------------|------|
-| sklearn (1 thread) | ~8,300 ms | ~600 samp/s | Original baseline |
+| sklearn (1 thread) | ~8,300 ms | ~600 samp/s | Baseline |
 | sklearn (8 threads) | ~2,000 ms | ~2,500 samp/s | Multi-threaded |
-| **ONNX Runtime (8 threads)** | **~400 ms** | **~12,500 samp/s** | **Default, 3.7× faster** |
+| **ONNX Runtime (8 threads)** | **~400 ms** | **~12,500 samp/s** | **Default, ~3.7× faster** |
 
-The system automatically selects the best available backend. If `onnxruntime` is not installed, it falls back to sklearn with no code changes needed.
+Auto-fallback to sklearn if `onnxruntime` is not installed.
 
 ### Manual Classification Workflow
 
-1. Select objects to classify
-2. Click "Start Classification"
-3. System automatically:
-   - Extracts light curves from database
-   - Uses feets to extract 15 astronomical features
-   - LightGBM model predicts variable star type (via ONNX Runtime)
-   - Results above threshold are written back to database
+1. Select objects in the web UI
+2. Click **Start Classification**
+3. The system automatically extracts light curves, computes 15 astronomical features with `feets`, runs the hierarchical LightGBM predictor (via ONNX Runtime), and writes high-confidence results back to TDengine
 
 ### Automatic Classification
 
-System supports automatic detection of light curves requiring classification, fully decoupled from importers:
+The auto-classifier is fully decoupled from importers:
 
 | Detection Condition | Description |
 |---------------------|-------------|
-| **First Appearance** | source_id not in history file |
-| **Data Growth >20%** | Data points increased by more than 20% compared to history |
+| **First Appearance** | `source_id` not in history file |
+| **Data Growth >20%** | Data points increased by >20% compared to history |
 
-**Workflow**:
+**Workflow:**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  1. Data Import (any importer)                                   │
-│     catalog_importer / lightcurve_importer                      │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. Click "Query" button, triggers check_candidates program      │
-│     - Query data point count for all objects in database        │
-│     - Compare with history file lc_counts_<db>.csv              │
-│     - Write new/grown >20% objects to auto_classify_queue.csv   │
-│     - Replace history file with new data                        │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. Click "Start", launches auto_classify.py background task    │
-│     - Batch processing (default 5000 per batch)                 │
-│     - Feature extraction with feets + LightGBM prediction       │
-│     - High-confidence results auto-written to database          │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. Import data via any importer
+2. Click **Query** to run `check_candidates` — compares object counts against `data/lc_counts_<db>.csv` and writes candidates to `data/auto_classify_queue_<db>.csv`
+3. Click **Start** to launch `auto_classify.py` — processes in batches (default 5,000), extracts features, runs inference, and writes results
 
-**Generated Files**:
-
-| File | Description |
-|------|-------------|
-| `data/lc_counts_<db>.csv` | Historical count records for next comparison |
-| `data/auto_classify_queue_<db>.csv` | Classification queue |
-
-**Supported Features**:
-
-- **Decoupled Design**: Detection program independent from importer, can be triggered manually anytime
-- **Interruptible**: Stop anytime, saves current progress
-- **Resume Support**: Click "Continue" to resume from interruption point
-- **Real-time Progress**: SSE pushes batch progress
-- **Configurable Batch Size**: Default 5000, adjustable
-- **Multi-database Support**: Independent queue and history files per database
+**Features:**
+- Interruptible with resume support
+- Real-time progress via SSE
+- Configurable batch size
+- Independent queues and history per database
 
 ### Confidence Threshold
 
-Adjustable in "System Settings":
-
-- Above threshold: Automatically written to database
-- Below threshold: Display only, not saved
+Adjustable in **System Settings**:
+- Above threshold: automatically written to database
+- Below threshold: displayed only
 
 ---
 
@@ -413,39 +299,43 @@ Adjustable in "System Settings":
 
 ```
 TDlight/
-├── config.json          # Main configuration file
-├── start_env.sh         # Container startup script
+├── config.json              # Main configuration
+├── start_env.sh             # Environment activation script
+├── install.sh               # One-click installation script
+├── INSTALL.md               # Detailed installation guide
+├── requirements.txt         # Python dependencies
+├── Makefile                 # C++ build (used by install.sh)
 │
-├── web/                 # Web service
-│   ├── web_api.cpp      # C++ HTTP backend
-│   ├── index.html       # Frontend page
-│   ├── app.js           # Frontend interaction logic
-│   └── build.sh         # Build script
+├── web/                     # Web service
+│   ├── web_api.cpp          # C++ HTTP backend
+│   ├── build.sh
+│   └── static/              # Frontend assets
 │
-├── class/               # Classification module
-│   ├── classify_pipeline.py    # Manual classification pipeline
-│   ├── auto_classify.py        # Automatic classification script
-│   └── hierarchical_predictor.py  # Hierarchical LightGBM predictor (ONNX/sklearn)
+├── class/                   # Classification module
+│   ├── classify_pipeline.py
+│   ├── auto_classify.py
+│   └── hierarchical_predictor.py
 │
-├── insert/              # Data import and detection
-│   ├── catalog_importer.cpp      # Catalog import
-│   ├── lightcurve_importer.cpp   # Light curve import
-│   ├── check_candidates.cpp      # Auto-classify candidate detection
-│   ├── crossmatch.cpp            # Catalog cross-match utility
+├── insert/                  # Data importers
+│   ├── catalog_importer.cpp
+│   ├── lightcurve_importer.cpp
+│   ├── check_candidates.cpp
+│   ├── crossmatch.cpp
 │   └── build.sh
 │
-├── models/              # Pre-trained hierarchical models (auto-downloaded)
-│   └── hierarchical_unlimited/
-│       ├── *.pkl / *.onnx      # 7 sub-models (4-level tree)
-│       └── label_encoders.pkl
+├── query/                   # Query tools
+│   └── optimized_query.cpp
 │
-├── libs/                # C++ runtime libraries
-├── include/             # C++ header files
-├── config/              # TDengine client configuration
-├── data/                # Data file directory
-│   ├── lc_counts_<db>.csv           # Historical count records
-│   └── auto_classify_queue_<db>.csv # Classification queue
-└── runtime/             # Runtime logs
+├── models/                  # Pre-trained models (auto-downloaded)
+│   ├── hierarchical_unlimited/   # 7 sub-models (pkl + onnx)
+│   └── lgbm_111w_model.*         # Legacy flat model
+│
+├── testdata/                # Test data (auto-extracted by install.sh)
+├── libs/                    # C++ runtime libraries
+├── include/                 # C++ header files
+├── config/                  # TDengine client configuration
+├── data/                    # Runtime data files (counts, queues)
+└── runtime/                 # Runtime logs
 ```
 
 ---
@@ -458,20 +348,20 @@ TDlight/
 | `/api/region_search` | GET | Region search |
 | `/api/lightcurve/{table}` | GET | Get light curve |
 | `/api/classify_objects` | POST | Start classification task |
-| `/api/classify_stream` | GET (SSE) | Classification progress stream |
+| `/api/classify_stream` | GET (SSE) | Classification progress |
 | `/api/import/start` | POST | Start data import |
-| `/api/import/stream` | GET (SSE) | Import progress stream |
+| `/api/import/stream` | GET (SSE) | Import progress |
 | `/api/import/stop` | POST | Stop import |
-| `/api/auto_classify/check` | POST | Trigger candidate detection (compare history, generate queue) |
-| `/api/auto_classify/candidates` | GET | Get number of objects to classify |
-| `/api/auto_classify/start` | POST | Start auto-classification task |
+| `/api/auto_classify/check` | POST | Trigger candidate detection |
+| `/api/auto_classify/candidates` | GET | Count of pending candidates |
+| `/api/auto_classify/start` | POST | Start auto-classification |
 | `/api/auto_classify/stop` | POST | Stop auto-classification |
-| `/api/auto_classify/stream` | GET (SSE) | Auto-classification progress stream |
-| `/api/auto_classify/results` | GET | Get auto-classification results |
-| `/api/config` | GET/POST | Get/modify configuration |
-| `/api/config/reload` | GET | Reload configuration to backend |
+| `/api/auto_classify/stream` | GET (SSE) | Auto-classification progress |
+| `/api/auto_classify/results` | GET | Auto-classification results |
+| `/api/config` | GET/POST | Get / modify configuration |
+| `/api/config/reload` | GET | Reload backend configuration |
 | `/api/databases` | GET | List databases |
-| `/api/database/drop` | POST | Delete database |
+| `/api/database/drop` | POST | Drop a database |
 
 ---
 
@@ -480,74 +370,68 @@ TDlight/
 ### Compilation Error: Header Files Not Found
 
 Ensure you compile in the correct directory:
-
 ```bash
 cd web && ./build.sh
-cd insert && ./build.sh
+cd ../insert && ./build.sh
 ```
 
-### Runtime Error: .so Files Not Found
-
-Set library path:
+### Runtime Error: `.so` Files Not Found
 
 ```bash
+source start_env.sh
+# Or manually:
 export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 ```
 
 ### Cannot Connect to TDengine
 
-1. Confirm taosd is running inside container
-2. Check database configuration in `config.json`
-3. Check if port 6041 is accessible
+1. Confirm `taosd` is running: `systemctl --user status taosd`
+2. Check `config.json` database settings
+3. Verify port 6030 is accessible
 
 ### VNodes Exhausted Error
 
 Database VGroups resources exhausted. Solutions:
-
-1. Delete unnecessary databases via Web interface
-2. Or increase `supportVnodes` value in `config/taos_cfg/taos.cfg`
+1. Delete unnecessary databases via the web UI
+2. Or increase `supportVnodes` in `config/taos_cfg/taos.cfg`
 
 ### No Classification Results
 
 1. Confirm `python` path in `config.json` is correct
-2. Confirm feets environment has complete dependencies
-3. Check logs in `class/` directory
+2. Confirm the `tdlight` conda environment has all dependencies
+3. Check logs in the `class/` directory
 
-### Terminal Crash / Commands Not Working
-
-If terminal crashes or commands fail after running `source start_env.sh`:
+### Terminal Crash After `source start_env.sh`
 
 ```bash
-# Check if libs/ contains incompatible system libraries
+# Check for incompatible system libraries in libs/
 ls libs/ | grep -E "libstdc|libgcc|libgomp"
 
-# If found, delete them (should use system versions)
+# If found, remove them (system versions should be used)
 rm -f libs/libstdc++.so* libs/libgcc_s.so* libs/libgomp.so*
 ```
 
 ### Port 5001 Already in Use
 
 ```bash
-# Find the process using the port
 lsof -i :5001
-
-# Or change port (edit PORT constant in web/web_api.cpp)
+# Or change the PORT constant in web/web_api.cpp
 ```
 
 ---
 
-## Large File Acquisition
+## Large Files
 
-The following files are not included in the repository due to their large size. Contact the author if needed:
+The following files are not included in the repository due to size. They are downloaded automatically by `install.sh`:
 
 | File | Size | How to Obtain |
 |------|------|---------------|
-| `models/hierarchical_unlimited/*.pkl` | ~350MB total | Auto-downloaded during installation |
-| `models/hierarchical_unlimited/*.onnx` | ~280MB total | Auto-downloaded during installation |
-| `data/` | - | Users provide their own astronomical data |
-| TDengine | ~500MB | Auto-downloaded during installation |
+| `models/hierarchical_unlimited/*.pkl` | ~350 MB total | Auto-downloaded by `install.sh` |
+| `models/hierarchical_unlimited/*.onnx` | ~280 MB total | Auto-downloaded by `install.sh` |
+| `data/` | - | User-provided astronomical data |
+| TDengine | ~500 MB | Auto-downloaded by `install.sh` |
 
-**Contact**: For pre-trained models or deployment issues, please contact 3023244355@tju.edu.cn.
+**Contact:** For pre-trained model or deployment questions, please contact 3023244355@tju.edu.cn.
 
 ---
 
@@ -580,37 +464,10 @@ If you use this software, please cite HEALPix:
 
 ## Acknowledgments
 
-- [TDengine](https://www.taosdata.com/) - High-performance time-series database
-- [HEALPix](https://healpix.sourceforge.net/) - Hierarchical Equal Area isoLatitude Pixelization
-- [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
-- [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
-- [ONNX Runtime](https://onnxruntime.ai/) - High-Performance Inference Engine
-- [Three.js](https://threejs.org/) - WebGL 3D Rendering
-- [Chart.js](https://www.chartjs.org/) - Chart Visualization
-
-
-| Library | License | Source |
-|---------|---------|--------|
-| CFITSIO | NASA/GSFC (BSD-like) | https://heasarc.gsfc.nasa.gov/fitsio/ |
-| HEALPix C++ | GPL v2 | http://healpix.sourceforge.net |
-| libsharp | GPL v2 | http://healpix.sourceforge.net |
-
-### HEALPix Citation
-
-If you use this software, please cite HEALPix:
-
-> K.M. Górski, E. Hivon, A.J. Banday, B.D. Wandelt, F.K. Hansen, M. Reinecke, M. Bartelmann (2005),  
-> *HEALPix: A Framework for High-Resolution Discretization and Fast Analysis of Data Distributed on the Sphere*,  
-> ApJ, 622, p.759-771  
-> http://healpix.sourceforge.net
-
----
-
-## Acknowledgments
-
-- [TDengine](https://www.taosdata.com/) - High-performance time-series database
-- [HEALPix](https://healpix.sourceforge.net/) - Hierarchical Equal Area isoLatitude Pixelization
-- [feets](https://feets.readthedocs.io/) - Feature Extraction for Time Series
-- [LightGBM](https://lightgbm.readthedocs.io/) - Gradient Boosting Framework
-- [Three.js](https://threejs.org/) - WebGL 3D Rendering
-- [Chart.js](https://www.chartjs.org/) - Chart Visualization
+- [TDengine](https://www.taosdata.com/) — High-performance time-series database
+- [HEALPix](https://healpix.sourceforge.net/) — Hierarchical Equal Area isoLatitude Pixelization
+- [feets](https://feets.readthedocs.io/) — Feature Extraction for Time Series
+- [LightGBM](https://lightgbm.readthedocs.io/) — Gradient Boosting Framework
+- [ONNX Runtime](https://onnxruntime.ai/) — High-Performance Inference Engine
+- [Three.js](https://threejs.org/) — WebGL 3D Rendering
+- [Chart.js](https://www.chartjs.org/) — Chart Visualization

@@ -1,92 +1,95 @@
-# TDlight 测试数据集
+# TDlight Test Data
 
-本目录包含用于测试 TDlight 系统的 Gaia DR2 光变曲线样本数据。
+This directory contains a sample of Gaia DR2 variable star data for testing the TDlight system.
 
-## 文件说明
+## Files
 
-| 文件 | 大小 | 说明 |
-|------|------|------|
-| `gaia_testdata.tar.gz` | 40MB | 测试数据压缩包 |
+| File | Size | Description |
+|------|------|-------------|
+| `gaia_testdata.tar.gz` | ~40 MB | Compressed test dataset |
 
-### 压缩包内容
-
-解压后包含：
+### Contents after extraction
 
 ```
-catalogs/                      # 星表文件（708个）
-├── catalog_001.csv            # 第1次观测
-├── catalog_002.csv            # 第2次观测
+catalogs/                  # Catalog files (708 files)
+├── catalog_001.csv        # Observation 1
+├── catalog_002.csv        # Observation 2
 ├── ...
-└── catalog_708.csv            # 第708次观测
+└── catalog_708.csv        # Observation 708
 
-lightcurves/                   # 原始光变曲线文件（3800个）
-├── lightcurve_xxx.csv         # 每个天体一个文件
+lightcurves/               # Light curve files (3,800 files)
+├── lightcurve_xxx.csv     # One file per object
 └── ...
 
-source_coordinates.csv         # 天体坐标文件
+source_coordinates.csv     # Object coordinates
 ```
 
-## 数据统计
+## Statistics
 
-- **天体数量**: 3,800 个
-- **观测记录**: 336,690 条
-- **Catalog文件数**: 708 个
-- **波段**: G / BP / RP
-- **天区覆盖**: 全天球 (RA: 0°-360°, DEC: -87°-+87°)
+- **Objects**: 3,800
+- **Observations**: 336,690
+- **Catalog files**: 708
+- **Bands**: G / BP / RP
+- **Sky coverage**: Full sky (RA: 0°–360°, DEC: –87°–+87°)
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 1. 解压数据
+# 1. Extract data
 cd testdata
 tar -xzf gaia_testdata.tar.gz
 
-# 2. 进入 TDlight 环境
+# 2. Activate environment
 cd ..
-./start_env.sh
+conda activate tdlight
+source start_env.sh
 
-# 3. 在容器内导入数据
-cd /app/insert
-./lightcurve_importer testdb ../testdata/catalogs/
+# 3. Import via command line
+cd insert
+./lightcurve_importer \
+    --lightcurves_dir ../testdata/lightcurves \
+    --coords ../testdata/source_coordinates.csv \
+    --db gaiadr2_lc \
+    --threads 16
 ```
 
-## 数据格式
+## Data Formats
 
-### Catalog 文件格式 (catalogs/*.csv)
+### Catalog file (`catalogs/*.csv`)
 
-每个 catalog 文件中，每个天体只出现一次（代表一次观测）：
+Each catalog contains one row per object per observation:
 
 ```csv
 source_id,ra,dec,class,band,time,flux,flux_err,mag,mag_err
 1835164110276685440,300.42,26.46,Unknown,G,1763.615,24024.40,175.59,14.74,0.0079
 ```
 
-### Lightcurve 文件格式 (lightcurves/*.csv)
+### Light curve file (`lightcurves/*.csv`)
 
-每个天体一个文件，包含该天体的所有观测记录（已计算 mag_err）：
+One file per object, containing all observations:
 
 ```csv
 time,band,flux,flux_err,mag,mag_err
 1710.067,G,3861.14,34.75,16.72,0.0098
 ```
 
-### 坐标文件格式 (source_coordinates.csv)
+### Coordinate file (`source_coordinates.csv`)
 
 ```csv
 source_id,ra,dec
 1007596926756899072,96.68,64.12
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| source_id | int64 | Gaia DR2 天体ID |
-| ra | double | 赤经 (度) |
-| dec | double | 赤纬 (度) |
+| Field | Type | Description |
+|-------|------|-------------|
+| `source_id` | int64 | Gaia DR2 source ID |
+| `ra` | double | Right Ascension (degrees) |
+| `dec` | double | Declination (degrees) |
 
-## 数据来源
+## Data Source
 
-数据来自 [Gaia DR2 Variable Stars](https://gea.esac.esa.int/archive/) 公开数据集。
+Data from the [Gaia DR2 Variable Stars](https://gea.esac.esa.int/archive/) public dataset.
 
-## 许可证
+## License
 
-测试数据遵循 Gaia DR2 数据使用条款。
+Test data follows Gaia DR2 data usage terms.

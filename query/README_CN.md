@@ -1,10 +1,10 @@
 [English](README.md) | 中文
 
-# TDengine HEALPix 空间查询工具
+# TDlight HEALPix 空间查询工具
 
-## 功能说明
+基于 HEALPix 的高效空间查询工具。
 
-本模块实现基于 HEALPix 的高效空间查询工具，支持：
+## 功能特性
 
 1. **锥形检索（Cone Search）** - 给定中心坐标和半径，搜索区域内的所有源
 2. **时间范围查询** - 查询指定 source_id 在某时间范围内的观测记录
@@ -21,145 +21,87 @@
 
 ## 环境要求
 
-### 必须在 Apptainer 容器内运行
-
-本程序使用 TDengine 原生 C 接口，必须在 Apptainer 容器内运行以确保：
-1. 正确的 TDengine 配置（`/etc/taos`）
-2. 正确的库路径（`libtaos.so`, `libhealpix_cxx.so`）
-
-### 关键路径
-
-```
-项目根目录: /mnt/nvme/home/yxh/code/TDengine-test
-├── tdengine-fs/                    # TDengine Apptainer 容器
-├── runtime/
-│   ├── taos_home/cfg/taos.cfg     # TDengine 配置（端口6041）
-│   ├── libs/                       # HEALPix 依赖库
-│   └── deps/local/include/         # HEALPix 头文件
-└── runtime-final/
-    └── query/
-        ├── optimized_query.cpp     # 源代码
-        ├── optimized_query         # 编译后的可执行文件
-        └── README.md               # 本文档
-
-Apptainer 路径:
-APPTAINER_BIN=/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer
-```
+- Linux x86_64
+- TDengine 原生 C 客户端（`libtaos.so`）
+- HEALPix C++ 库（已放置在 `libs/` 目录）
+- `start_env.sh` 会自动设置 `LD_LIBRARY_PATH`
 
 ---
 
-## 编译命令
-
-在宿主机上编译（需要 TDengine 和 HEALPix 开发库）：
+## 编译
 
 ```bash
-cd /mnt/nvme/home/yxh/code/TDengine-test/runtime-final/query
-
-TAOS_DIR=/mnt/nvme/home/yxh/code/TDengine-test/tdengine-fs/usr/local/taos
-LIBS_DIR=/mnt/nvme/home/yxh/code/TDengine-test/runtime/libs
-DEPS_DIR=/mnt/nvme/home/yxh/code/TDengine-test/runtime/deps/local/include
+cd query
 
 g++ -std=c++17 -O3 -march=native optimized_query.cpp -o optimized_query \
-    -I${TAOS_DIR}/include \
-    -I${DEPS_DIR} \
-    -L${TAOS_DIR}/driver \
-    -L${LIBS_DIR} \
+    -I../include \
+    -L../libs \
+    -L$HOME/taos/driver \
     -ltaos -lhealpix_cxx -lpthread \
-    -Wl,-rpath,${TAOS_DIR}/driver \
-    -Wl,-rpath,${LIBS_DIR}
+    -Wl,-rpath,../libs \
+    -Wl,-rpath,$HOME/taos/driver
+```
+
+也可以使用顶层 Makefile（如可用）：
+
+```bash
+make query
 ```
 
 ---
 
-## 运行命令（必须在 Apptainer 容器内）
+## 使用说明
 
-### 基础运行模板
+确保 `taosd` 已运行，且环境变量已设置：
 
 ```bash
-cd /mnt/nvme/home/yxh/code/TDengine-test
-
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query [参数]
+conda activate tdlight
+source start_env.sh
 ```
 
----
-
-## 使用示例
-
-### 1. 锥形检索（Cone Search）
-
-搜索以 (RA=180°, DEC=30°) 为中心，半径 0.1° 范围内的所有源：
+### 1. 锥形检索
 
 ```bash
-cd /mnt/nvme/home/yxh/code/TDengine-test
-
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query \
+./optimized_query \
     --cone --ra 180 --dec 30 --radius 0.1 \
-    --db catalog_test --port 6041 \
+    --db gaiadr2_lc \
     --output cone_results.csv
 ```
 
 ### 2. 时间范围查询
 
-查询指定 source_id 的所有观测记录：
-
 ```bash
-cd /mnt/nvme/home/yxh/code/TDengine-test
-
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query \
+./optimized_query \
     --time --source_id 5870536848431465216 \
-    --db catalog_test --port 6041 \
+    --db gaiadr2_lc \
     --output time_results.csv
 ```
 
 带时间条件：
+
 ```bash
-... --time --source_id 12345 --time_cond "ts >= '2020-01-01' AND ts <= '2020-12-31'" ...
+./optimized_query \
+    --time --source_id 12345 \
+    --time_cond "ts >= '2020-01-01' AND ts <= '2020-12-31'" \
+    --db gaiadr2_lc
 ```
 
 ### 3. 批量锥形检索
 
-从 CSV 文件读取多个查询参数：
+准备 `queries.csv`：
+
+```csv
+ra,dec,radius
+180.0,30.0,0.1
+181.0,31.0,0.05
+```
+
+执行：
 
 ```bash
-# 准备查询文件 queries.csv:
-# ra,dec,radius
-# 180.0,30.0,0.1
-# 181.0,31.0,0.05
-# 182.0,32.0,0.2
-
-cd /mnt/nvme/home/yxh/code/TDengine-test
-
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query \
+./optimized_query \
     --batch --input queries.csv \
-    --db catalog_test --port 6041 \
+    --db gaiadr2_lc \
     --output batch_results/
 ```
 
@@ -188,7 +130,7 @@ cd /mnt/nvme/home/yxh/code/TDengine-test
 | 参数 | 说明 |
 |------|------|
 | `--source_id <ID>` | 目标源 ID |
-| `--time_cond "<条件>"` | 时间条件（SQL WHERE 语法） |
+| `--time_cond "<条件>"` | 针对 `ts` 的 SQL WHERE 条件 |
 
 ### 批量查询参数
 
@@ -200,17 +142,16 @@ cd /mnt/nvme/home/yxh/code/TDengine-test
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--db` | test_db | 数据库名 |
-| `--host` | localhost | 服务器地址 |
-| `--port` | 6030 | TDengine 原生端口 |
-| `--user` | root | 用户名 |
-| `--password` | taosdata | 密码 |
-| `--table` | sensor_data | 超级表名 |
-| `--nside` | 64 | HEALPix NSIDE 参数 |
+| `--db` | `test_db` | 数据库名 |
+| `--host` | `localhost` | 服务器地址 |
+| `--port` | `6030` | TDengine 原生端口 |
+| `--user` | `root` | 用户名 |
+| `--password` | `taosdata` | 密码 |
+| `--table` | `lightcurves` | 超级表名 |
+| `--nside` | `64` | HEALPix NSIDE |
 | `--output` | (无) | 输出 CSV 文件/目录 |
 | `--limit` | (无) | 限制结果数量 |
-| `--display` | 10 | 显示结果条数 |
-| `--quiet` | false | 静默模式 |
+| `--display` | `10` | 显示结果条数 |
 
 ---
 
@@ -248,22 +189,23 @@ ts,source_id,ra,dec,band,cls,mag,mag_error,flux,flux_error,jd_tcb
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| ts | TIMESTAMP | 观测时间戳 |
-| band | NCHAR(16) | 波段 |
-| mag | DOUBLE | 星等 |
-| mag_error | DOUBLE | 星等误差 |
-| flux | DOUBLE | 流量 |
-| flux_error | DOUBLE | 流量误差 |
-| jd_tcb | DOUBLE | 儒略日 |
+| `ts` | TIMESTAMP | 观测时间戳 |
+| `band` | NCHAR(16) | 波段 |
+| `mag` | DOUBLE | 星等 |
+| `mag_error` | DOUBLE | 星等误差 |
+| `flux` | DOUBLE | 流量 |
+| `flux_error` | DOUBLE | 流量误差 |
+| `jd_tcb` | DOUBLE | 儒略日 |
 
 TAG 字段：
+
 | TAG | 类型 | 说明 |
 |-----|------|------|
-| healpix_id | BIGINT | HEALPix 像素 ID |
-| source_id | BIGINT | 源 ID |
-| ra | DOUBLE | 赤经 |
-| dec | DOUBLE | 赤纬 |
-| cls | NCHAR(32) | 分类标签 |
+| `healpix_id` | BIGINT | HEALPix 像素 ID |
+| `source_id` | BIGINT | 源 ID |
+| `ra` | DOUBLE | 赤经 |
+| `dec` | DOUBLE | 赤纬 |
+| `cls` | NCHAR(32) | 分类标签 |
 
 ---
 
@@ -291,40 +233,33 @@ TAG 字段：
 
 ## 常见问题
 
-### 1. "连接失败"
+### "连接失败"
 
-- 检查 TDengine 服务是否启动
-- 确认端口是 6041（不是默认的 6030）
-- 必须在 Apptainer 容器内运行
+- 检查 `taosd` 是否运行：`systemctl --user status taosd`
+- 确认端口 `6030` 可访问
+- 确保 `LD_LIBRARY_PATH` 包含 `../libs` 和 `$HOME/taos/driver`
 
 ```bash
-# 检查 taosd 运行状态
-ps aux | grep taosd
+source ../start_env.sh
 ```
 
-### 2. "libhealpix_cxx.so not found"
+### "libhealpix_cxx.so not found"
 
-确保绑定了 libs 目录并设置了 LD_LIBRARY_PATH：
+确保 `LD_LIBRARY_PATH` 指向 `libs/`：
+
 ```bash
---bind runtime/libs:/app/libs \
---env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver
+export LD_LIBRARY_PATH=../libs:$HOME/taos/driver:$LD_LIBRARY_PATH
 ```
 
-### 3. "libgomp.so.1 not found"
+### "Database not found"
 
-绑定宿主机的 libgomp：
+检查数据库名：
+
 ```bash
---bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1
+taos -s "SHOW DATABASES;"
 ```
 
-### 4. "Database not found"
-
-检查数据库名是否正确：
-```bash
-apptainer exec ... taos -s "SHOW DATABASES;"
-```
-
-### 5. 结果为空
+### 结果为空
 
 - 检查坐标范围是否正确（RA: 0-360, DEC: -90 到 90）
 - 尝试增大搜索半径
@@ -332,57 +267,16 @@ apptainer exec ... taos -s "SHOW DATABASES;"
 
 ---
 
-## 快速测试
-
-验证安装和连接是否正常：
-
-```bash
-cd /mnt/nvme/home/yxh/code/TDengine-test
-
-# 查看帮助
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query --help
-
-# 简单锥形查询测试
-/mnt/nvme/home/yxh/anaconda3/envs/singularity/bin/apptainer exec \
-    --bind runtime/taos_home/cfg:/etc/taos \
-    --bind runtime-final:/app \
-    --bind runtime/libs:/app/libs \
-    --bind /usr/lib/x86_64-linux-gnu/libgomp.so.1:/usr/lib/libgomp.so.1 \
-    --env LD_LIBRARY_PATH=/app/libs:/usr/local/taos/driver \
-    tdengine-fs \
-    /app/query/optimized_query \
-    --cone --ra 180 --dec 0 --radius 1 \
-    --db catalog_test --port 6041 --display 5
-```
-
----
-
 ## 扩展开发
 
 ### 修改默认参数
 
-编辑 `optimized_query.cpp` 中的 `main()` 函数默认值：
+编辑 `optimized_query.cpp` 中的 `main()` 函数：
 
 ```cpp
-string db_name = "catalog_test";  // 修改默认数据库
-int port = 6041;                   // 修改默认端口
-int nside = 64;                    // 修改 HEALPix 精度
+string db_name = "gaiadr2_lc";
+int port = 6030;
+int nside = 64;
 ```
 
-### 添加新的查询模式
-
-1. 在 `OptimizedQueryEngine` 类中添加新方法
-2. 在 `main()` 中添加命令行参数解析
-3. 重新编译
-
-### 输出格式扩展
-
-修改 `exportToCSV()` 和 `displayResults()` 方法。
-
+然后重新编译。
