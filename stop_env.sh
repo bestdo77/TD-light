@@ -33,6 +33,16 @@ else
     echo -e "${YELLOW}[i] Web server not running${NC}"
 fi
 
+# Stop train_server
+if pgrep -f "train_server.py" > /dev/null; then
+    echo -e "[i] Stopping training server..."
+    pkill -f "train_server.py"
+    sleep 1
+    echo -e "${GREEN}[OK] Training server stopped${NC}"
+else
+    echo -e "${YELLOW}[i] Training server not running${NC}"
+fi
+
 if [[ "$STOP_TDENGINE" == "true" ]]; then
     # Stop TDengine (optional)
     if pgrep -x taosd > /dev/null; then

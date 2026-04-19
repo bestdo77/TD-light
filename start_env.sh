@@ -69,6 +69,10 @@ fi
 pkill -f "./web_api" 2>/dev/null || true
 sleep 1
 
+# Kill old train_server if exists
+pkill -f "train_server.py" 2>/dev/null || true
+sleep 1
+
 # Check if web_api binary exists
 if [ ! -f "$PROJECT_ROOT/web/web_api" ]; then
     echo -e "${YELLOW}[!] web_api not found. Run 'make' first${NC}"
@@ -85,16 +89,33 @@ sleep 2
 # Check if started
 if kill -0 $WEB_PID 2>/dev/null; then
     echo -e "${GREEN}[OK] Web server started (PID: $WEB_PID)${NC}"
-    echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "  Open: ${GREEN}http://localhost:5001${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "  Logs: tail -f runtime/web_api.log"
-    echo -e "  Stop: pkill -f web_api"
-    echo ""
 else
     echo -e "${YELLOW}[!] Failed to start web server${NC}"
     echo "Check logs: cat $PROJECT_ROOT/runtime/web_api.log"
     exit 1
 fi
+
+# Start training server in background
+echo -e "[i] Starting training server..."
+cd "$PROJECT_ROOT"
+nohup python "$PROJECT_ROOT/class/train_server.py" > "$PROJECT_ROOT/runtime/train_server.log" 2>&1 &
+TRAIN_PID=$!
+sleep 2
+
+if kill -0 $TRAIN_PID 2>/dev/null; then
+    echo -e "${GREEN}[OK] Training server started (PID: $TRAIN_PID)${NC}"
+else
+    echo -e "${YELLOW}[!] Failed to start training server${NC}"
+    echo "Check logs: cat $PROJECT_ROOT/runtime/train_server.log"
+fi
+
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "  Main UI:  ${GREEN}http://localhost:5001${NC}"
+echo -e "  Training: ${GREEN}http://localhost:5002${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "  Logs: tail -f runtime/web_api.log"
+echo -e "        tail -f runtime/train_server.log"
+echo -e "  Stop: pkill -f web_api; pkill -f train_server.py"
+echo ""

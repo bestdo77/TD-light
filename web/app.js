@@ -8,7 +8,7 @@ let isClassificationRunning = false;
 let currentLightcurveData = null;
 
 window.switchTab = function(tabName) {
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
     document.getElementById('nav-' + tabName)?.classList.add('active');
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.getElementById(tabName + 'Tab')?.classList.add('active');
@@ -1720,3 +1720,240 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
+// ============================================================
+// TDlight Incremental Training UI
+// ============================================================
+
+let trainEventSource = null;
+let isTrainingRunning = false;
+
+window.onTrainFileSelected = function(input) {
+    const nameEl = document.getElementById('trainFileName');
+    if (input.files && input.files.length > 0) {
+        const file = input.files[0];
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        nameEl.innerHTML = `<i class="fas fa-file-archive"></i> ${file.name} <span style="color:var(--text-secondary);">(${sizeMB} MB)</span>`;
+        nameEl.style.color = 'var(--accent)';
+    } else {
+        nameEl.textContent = '';
+    }
+};
+
+window.startTraining = async function() {
+    const fileInput = document.getElementById('trainFileInput');
+    const labelSelect = document.getElementById('trainLabelSelect');
+    const doTrain = document.getElementById('trainDoTrain').checked;
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showToast('请选择训练文件 / Please select a training file', 'error');
+        return;
+    }
+    if (!labelSelect.value) {
+        showToast('请选择类别标签或启用自动识别 / Please select a label or enable auto-detect', 'error');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const label = labelSelect.value === 'auto' ? 'auto' : labelSelect.value;
+    const taskId = 'train_' + Date.now();
+    
+    // UI state
+    isTrainingRunning = true;
+    document.getElementById('trainStartBtn').style.display = 'none';
+    document.getElementById('trainStopBtn').style.display = 'inline-block';
+    document.getElementById('trainProgressPanel').style.display = 'block';
+    document.getElementById('trainProgressBar').style.width = '1%';
+    document.getElementById('trainProgressText').textContent = 'Uploading file...';
+    document.getElementById('trainSpinner').className = 'fas fa-spinner fa-spin';
+    
+    try {
+        // Step 1: Upload file
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const uploadResp = await fetch('http://localhost:5002/api/train/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const uploadData = await uploadResp.json();
+        if (!uploadData.success) {
+            throw new Error(uploadData.error || 'Upload failed');
+        }
+        
+        // Step 2: Start training
+        const startResp = await fetch('http://localhost:5002/api/train/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filepath: uploadData.path,
+                label: label,
+                train: doTrain,
+                task_id: taskId
+            })
+        });
+        const startData = await startResp.json();
+        if (!startData.success) {
+            throw new Error(startData.error || 'Failed to start training');
+        }
+        
+        // Step 3: Listen to SSE progress
+        if (trainEventSource) {
+            trainEventSource.close();
+        }
+        
+        trainEventSource = new EventSource('http://localhost:5002/api/train/stream?task_id=' + taskId);
+        
+        trainEventSource.onmessage = async (event) => {
+            try {
+                const status = JSON.parse(event.data);
+                const bar = document.getElementById('trainProgressBar');
+                const text = document.getElementById('trainProgressText');
+                const stepEl = document.getElementById('trainProgressStep');
+                
+                const pct = status.percent || 0;
+                if (bar) bar.style.width = pct + '%';
+                if (text) text.textContent = status.message || '';
+                if (stepEl) stepEl.textContent = status.step ? `[${status.step}]` : '';
+                const pctEl = document.getElementById('trainProgressPercent');
+                if (pctEl) pctEl.textContent = pct + '%';
+                
+                if (status.percent >= 100 || status.step === 'done' || status.step === 'error') {
+                    trainEventSource.close();
+                    trainEventSource = null;
+                    isTrainingRunning = false;
+                    document.getElementById('trainStartBtn').style.display = 'inline-block';
+                    document.getElementById('trainStopBtn').style.display = 'none';
+                    document.getElementById('trainSpinner').className = 'fas fa-check';
+                    
+                    if (status.step === 'error') {
+                        showToast('训练失败 / Training failed: ' + status.message, 'error');
+                    } else {
+                        showToast('训练完成 / Training complete!', 'success');
+                        window.loadTrainingSummary();
+                        document.getElementById('trainOnnxPanel').style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.error('Train SSE Error:', e);
+            }
+        };
+        
+        trainEventSource.onerror = (e) => {
+            console.log('Train SSE connection closed');
+            if (trainEventSource) {
+                trainEventSource.close();
+                trainEventSource = null;
+            }
+        };
+        
+    } catch (error) {
+        isTrainingRunning = false;
+        document.getElementById('trainStartBtn').style.display = 'inline-block';
+        document.getElementById('trainStopBtn').style.display = 'none';
+        document.getElementById('trainSpinner').className = 'fas fa-exclamation-triangle';
+        showToast('Error: ' + error.message, 'error');
+    }
+};
+
+window.exportOnnxModels = async function() {
+    const btn = document.getElementById('trainOnnxBtn');
+    const status = document.getElementById('trainOnnxStatus');
+    btn.disabled = true;
+    status.textContent = 'Exporting...';
+    status.style.color = 'var(--text-secondary)';
+    try {
+        const resp = await fetch('http://localhost:5002/api/train/export_onnx', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            status.textContent = 'Exported: ' + data.exported.join(', ');
+            status.style.color = 'var(--success)';
+            showToast('ONNX export completed', 'success');
+        } else {
+            status.textContent = data.error || 'Export failed';
+            status.style.color = 'var(--danger)';
+        }
+    } catch (error) {
+        status.textContent = 'Error: ' + error.message;
+        status.style.color = 'var(--danger)';
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+window.stopTraining = async function() {
+    try {
+        await fetch('http://localhost:5002/api/train/stop', { method: 'POST' });
+        showToast('已发送停止信号 / Stop signal sent', 'warning');
+        if (trainEventSource) {
+            trainEventSource.close();
+            trainEventSource = null;
+        }
+        isTrainingRunning = false;
+        document.getElementById('trainStartBtn').style.display = 'inline-block';
+        document.getElementById('trainStopBtn').style.display = 'none';
+        document.getElementById('trainSpinner').className = 'fas fa-stop';
+    } catch (e) {
+        showToast('停止失败 / Stop failed: ' + e.message, 'error');
+    }
+};
+
+window.loadTrainingSummary = async function() {
+    const container = document.getElementById('trainSummaryContent');
+    container.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> 加载中 / Loading...</p>';
+    
+    try {
+        const resp = await fetch('http://localhost:5002/api/train/summary');
+        const data = await resp.json();
+        if (!data.success) {
+            container.innerHTML = '<p style="color: var(--danger);">加载失败 / Failed to load</p>';
+            return;
+        }
+        
+        const summary = data.summary;
+        if (!summary || Object.keys(summary).length === 0) {
+            container.innerHTML = '<p>暂无训练数据 / No training data yet</p>';
+            return;
+        }
+        
+        let html = '<table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">';
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += '<th style="text-align:left; padding: 8px;">子模型 / Sub-model</th>';
+        html += '<th style="text-align:center; padding: 8px;">样本数 / Samples</th>';
+        html += '<th style="text-align:left; padding: 8px;">类别分布 / Distribution</th>';
+        html += '</tr>';
+        
+        for (const [name, info] of Object.entries(summary)) {
+            const dist = info.class_distribution || {};
+            const distStr = Object.entries(dist).map(([k,v]) => `${k}: ${v}`).join(', ');
+            html += `<tr style="border-bottom: 1px solid var(--border);">`;
+            html += `<td style="padding: 8px; color: var(--text);">${name}</td>`;
+            html += `<td style="padding: 8px; text-align:center; color: var(--accent); font-weight: bold;">${info.total_samples}</td>`;
+            html += `<td style="padding: 8px; color: var(--text-secondary); font-size: 0.85rem;">${distStr}</td>`;
+            html += `</tr>`;
+        }
+        html += '</table>';
+        container.innerHTML = html;
+        
+    } catch (e) {
+        container.innerHTML = '<p style="color: var(--danger);">加载失败 / Failed to load: ' + e.message + '</p>';
+    }
+};
+
+window.clearTrainingData = async function() {
+    if (!confirm('确定要清空所有积累的训练数据吗？此操作不可恢复。\nAre you sure you want to clear all accumulated training data? This cannot be undone.')) {
+        return;
+    }
+    try {
+        const resp = await fetch('http://localhost:5002/api/train/clear', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showToast('训练数据已清空 / Training data cleared', 'success');
+            window.loadTrainingSummary();
+        } else {
+            showToast('清空失败 / Clear failed: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        showToast('清空失败 / Clear failed: ' + e.message, 'error');
+    }
+};

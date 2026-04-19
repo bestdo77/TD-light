@@ -41,7 +41,15 @@
                     msg_enter_valid_coords: '请输入有效的 RA, DEC 和半径', msg_enter_source_id: '请输入 Source ID', msg_enter_valid_id: '请输入有效的 Source ID', msg_enter_valid_range: '请输入有效的坐标范围', msg_min_less_max: '最小值必须小于最大值',
                     msg_enter_catalog_path: '请输入星表目录路径', msg_enter_coords_path: '请输入坐标文件路径', msg_enter_lc_path: '请输入光变曲线目录路径', msg_no_lc_data: '未找到光变曲线数据', msg_get_lc_failed: '获取光变曲线失败', msg_list_empty: '列表为空', msg_no_lc_data_download: '没有光变曲线数据', msg_object_not_found: '未找到天体信息', msg_enter_db_name: '请填写数据库名',
                     msg_auto_detect_hint: '检测到 {0} 个天体待分类', msg_auto_starting: '正在自动开始分类...',
-                    auto_classify_after_import: '导入后自动分类', auto_classify_after_import_hint: '导入完成后自动检测并分类新数据'
+                    auto_classify_after_import: '导入后自动分类', auto_classify_after_import_hint: '导入完成后自动检测并分类新数据',
+                    nav_train: '模型训练', train_title: '增量训练', train_upload: '上传光变曲线', train_upload_hint: '点击或拖拽上传', train_upload_support: '支持 CSV 或 ZIP',
+                    train_label: '类别标签', train_label_optional: '可选', train_select_class: '-- 手动选择类别 --', train_auto_detect: '-- 自动识别 (CSV 含 class 列) --', train_do_train: '同时训练模型', train_do_train_hint: '勾选后会基于历史数据增量更新所有相关子模型',
+                    train_start: '开始', train_stop: '停止', train_progress: '训练进度',
+                    train_data_format: '数据格式说明', train_format_multi: '单文件多目标 CSV', train_format_multi_desc: '一个 CSV 包含多个天体的观测数据，必须包含 source_id 列用于分组。',
+                    train_format_zip: 'ZIP 压缩包', train_format_zip_desc: '每个 CSV 文件对应一个天体，文件名即为 source_id。打包成 ZIP 后上传。',
+                    train_col_ref: '字段说明', train_col_time: '观测时刻 (MJD/HJD/BJD)', train_col_mag: '星等 (mag)', train_col_err: '星等误差', train_col_sid: '目标标识 (多目标 CSV 必需)', train_col_class: '类别标签 (可选, 启用自动识别时必需)',
+                    train_format_tip: '提示：也支持标准格式 source_id,band,time,mag,mag_error,flux,flux_error,class。系统会自动识别列名（不区分大小写）。每个天体至少需要 5 个有效数据点。若 CSV 中包含 class 列，可选择"自动识别"模式批量导入多种类别。',
+                    train_summary: '训练数据概览', train_summary_empty: '暂无训练数据', train_summary_hint: '上传数据后点击刷新查看', train_refresh: '刷新', train_clear: '清空所有训练数据'
                 },
                 en: {
                     title: 'TD-light Light Curve Classification', mode: 'Stepper Mode',
@@ -76,7 +84,15 @@
                     msg_enter_valid_coords: 'Enter valid RA, DEC and radius', msg_enter_source_id: 'Enter Source ID', msg_enter_valid_id: 'Enter valid Source ID', msg_enter_valid_range: 'Enter valid coordinate range', msg_min_less_max: 'Min must be less than Max',
                     msg_enter_catalog_path: 'Enter catalog directory path', msg_enter_coords_path: 'Enter coordinates file path', msg_enter_lc_path: 'Enter light curve directory path', msg_no_lc_data: 'No light curve data found', msg_get_lc_failed: 'Failed to get light curve', msg_list_empty: 'List is empty', msg_no_lc_data_download: 'No light curve data', msg_object_not_found: 'Object not found', msg_enter_db_name: 'Enter database name',
                     msg_auto_detect_hint: 'Detected {0} objects for classification', msg_auto_starting: 'Auto-starting classification...',
-                    auto_classify_after_import: 'Auto-classify after import', auto_classify_after_import_hint: 'Automatically detect and classify new data after import'
+                    auto_classify_after_import: 'Auto-classify after import', auto_classify_after_import_hint: 'Automatically detect and classify new data after import',
+                    nav_train: 'Training', train_title: 'Incremental Training', train_upload: 'Upload Light Curves', train_upload_hint: 'Click or drag to upload', train_upload_support: 'Supports CSV or ZIP',
+                    train_label: 'Class Label', train_label_optional: 'optional', train_select_class: '-- Select Class --', train_auto_detect: '-- Auto-detect (CSV with class column) --', train_do_train: 'Train model after extraction', train_do_train_hint: 'Updates all relevant sub-models incrementally based on historical data',
+                    train_start: 'Start', train_stop: 'Stop', train_progress: 'Progress',
+                    train_data_format: 'Data Format', train_format_multi: 'Multi-object CSV', train_format_multi_desc: 'A single CSV containing observations for multiple objects. Must include a source_id column for grouping.',
+                    train_format_zip: 'ZIP Archive', train_format_zip_desc: 'Each CSV file corresponds to one object, with the filename as source_id. Pack into a ZIP and upload.',
+                    train_col_ref: 'Column Reference', train_col_time: 'Observation time (MJD/HJD/BJD)', train_col_mag: 'Magnitude (mag)', train_col_err: 'Magnitude error', train_col_sid: 'Object ID (required for multi-object CSV)', train_col_class: 'Class label (optional, required for auto-detect)',
+                    train_format_tip: 'Tip: The standard format source_id,band,time,mag,mag_error,flux,flux_error,class is also supported. Column names are auto-detected (case-insensitive). Each object needs at least 5 valid data points. If CSV contains a class column, use "Auto-detect" mode to batch import multiple classes.',
+                    train_summary: 'Data Summary', train_summary_empty: 'No training data yet', train_summary_hint: 'Upload data and click refresh to view', train_refresh: 'Refresh', train_clear: 'Clear All Training Data'
                 }
             };
             
@@ -787,6 +803,7 @@
         <div class="nav-tabs">
             <div class="nav-tab active" id="nav-portal" onclick="window.switchTab('portal')" data-i18n="nav_portal">天体分类</div>
             <div class="nav-tab" id="nav-import" onclick="window.switchTab('import')" data-i18n="nav_import">数据导入</div>
+            <div class="nav-tab" id="nav-train" onclick="window.switchTab('train')" data-i18n="nav_train">模型训练</div>
             <div class="nav-tab" id="nav-settings" onclick="window.switchTab('settings')" data-i18n="nav_settings">系统设置</div>
             <button id="langSwitcher" onclick="window.toggleLanguage()" style="margin-left: 16px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
                 <i class="fas fa-globe"></i>
@@ -1299,6 +1316,201 @@
             </div>
         </div>
         
+        <!-- 模型训练页 -->
+        <div id="trainTab" class="tab-content">
+            <div class="settings-container">
+                <!-- 上传与训练控制 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-rocket"></i></div>
+                            <span data-i18n="train_title">增量训练</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <!-- 左侧：上传区 -->
+                        <div>
+                            <label class="form-label" style="margin-bottom: 8px; display: block;" data-i18n="train_upload">上传光变曲线</label>
+                            <div id="trainDropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 32px 24px; text-align: center; background: var(--bg); transition: all 0.2s; cursor: pointer;"
+                                 ondragover="event.preventDefault(); this.style.borderColor='var(--accent)'; this.style.background='rgba(59,130,246,0.05)';"
+                                 ondragleave="this.style.borderColor='var(--border)'; this.style.background='var(--bg)';"
+                                 onclick="document.getElementById('trainFileInput').click();">
+                                <div style="font-size: 2rem; color: var(--accent); margin-bottom: 12px; font-weight: 700;">CSV / ZIP</div>
+                                <div style="color: var(--text); font-weight: 600; margin-bottom: 4px;" data-i18n="train_upload_hint">点击或拖拽上传</div>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem;" data-i18n="train_upload_support">支持 CSV 或 ZIP</div>
+                                <div id="trainFileName" style="color: var(--accent); font-size: 0.85rem; margin-top: 8px; font-weight: 600;"></div>
+                            </div>
+                            <input type="file" id="trainFileInput" accept=".csv,.zip" style="display: none;" onchange="window.onTrainFileSelected(this);">
+                        </div>
+                        
+                        <!-- 右侧：参数设置 -->
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <label class="form-label"><span data-i18n="train_label">类别标签</span> <span style="color: var(--text-secondary); font-size: 0.8rem; font-weight: normal;">(<span data-i18n="train_label_optional">可选</span>)</span></label>
+                                <select class="form-input" id="trainLabelSelect" style="width: 100%;">
+                                    <option value="auto" data-i18n="train_auto_detect">-- 自动识别 (CSV 含 class 列) --</option>
+                                    <option value="" data-i18n="train_select_class">-- 手动选择类别 --</option>
+                                    <optgroup label="Non-variable">
+                                        <option value="Non-var">Non-var</option>
+                                    </optgroup>
+                                    <optgroup label="Extrinsic">
+                                        <option value="ROT">ROT</option>
+                                        <option value="EA">EA</option>
+                                        <option value="EW">EW</option>
+                                    </optgroup>
+                                    <optgroup label="Intrinsic">
+                                        <option value="CEP">CEP</option>
+                                        <option value="DSCT">DSCT</option>
+                                        <option value="RRAB">RRAB</option>
+                                        <option value="RRC">RRC</option>
+                                        <option value="M">M</option>
+                                        <option value="SR">SR</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            
+                            <div style="background: var(--bg); border-radius: 8px; padding: 12px 16px; border: 1px solid var(--border);">
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.9rem; color: var(--text);">
+                                    <input type="checkbox" id="trainDoTrain" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                                    <span><strong data-i18n="train_do_train">同时训练模型</strong></span>
+                                </label>
+                                <div style="margin-left: 28px; margin-top: 4px; font-size: 0.8rem; color: var(--text-secondary);" data-i18n="train_do_train_hint">
+                                    勾选后会基于历史数据增量更新所有相关子模型
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: auto;">
+                                <button class="btn btn-success" onclick="window.startTraining();" id="trainStartBtn" style="flex: 1;">
+                                    <i class="fas fa-play"></i> <span data-i18n="train_start">开始</span>
+                                </button>
+                                <button class="btn btn-warning" onclick="window.stopTraining();" id="trainStopBtn" style="display: none; flex: 1;">
+                                    <i class="fas fa-stop"></i> <span data-i18n="train_stop">停止</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CSV 格式说明 -->
+                <div class="card" style="border-left: 4px solid #10b981;">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-file-csv"></i></div>
+                            <span data-i18n="train_data_format">数据格式说明</span>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <div>
+                            <div style="font-weight: 600; color: var(--text); margin-bottom: 8px; font-size: 0.95rem;">
+                                <span data-i18n="train_format_multi">单文件多目标 CSV</span>
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; margin-bottom: 12px;" data-i18n="train_format_multi_desc">一个 CSV 包含多个天体的观测数据，必须包含 source_id 列用于分组。</div>
+                            <pre style="background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 0.8rem; line-height: 1.6; overflow-x: auto; margin: 0;"><code>source_id,time,mag,mag_err
+12345678,1707.38,16.137,0.003
+12345678,1707.56,16.142,0.005
+12345678,1707.74,16.138,0.004
+12345679,1708.12,15.234,0.002
+12345679,1708.34,15.238,0.003</code></pre>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: var(--text); margin-bottom: 8px; font-size: 0.95rem;">
+                                <span data-i18n="train_format_zip">ZIP 压缩包</span>
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; margin-bottom: 12px;" data-i18n="train_format_zip_desc">每个 CSV 文件对应一个天体，文件名即为 source_id。打包成 ZIP 后上传。</div>
+                            <pre style="background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 0.8rem; line-height: 1.6; overflow-x: auto; margin: 0;"><code>train_data.zip
+├── 12345678.csv
+├── 12345679.csv
+└── 12345680.csv
+
+# 每个 CSV 格式（无需 source_id 列）：
+time,mag,mag_err
+1707.38,16.137,0.003
+1707.56,16.142,0.005</code></pre>
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <div style="font-weight: 600; color: var(--text); margin-bottom: 8px; font-size: 0.9rem;">
+                            <span data-i18n="train_col_ref">字段说明</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+                            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);"><strong style="color: var(--text);">time</strong><br><span data-i18n="train_col_time">观测时刻 (MJD/HJD/BJD)</span></div>
+                            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);"><strong style="color: var(--text);">mag / magnitude</strong><br><span data-i18n="train_col_mag">星等 (mag)</span></div>
+                            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);"><strong style="color: var(--text);">mag_err / error</strong><br><span data-i18n="train_col_err">星等误差</span></div>
+                            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);"><strong style="color: var(--text);">source_id</strong><br><span data-i18n="train_col_sid">目标标识 (多目标 CSV 必需)</span></div>
+                            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);"><strong style="color: var(--text);">class / label / type</strong><br><span data-i18n="train_col_class">类别标签 (可选, 启用自动识别时必需)</span></div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary);" data-i18n="train_format_tip">提示：也支持标准格式 source_id,band,time,mag,mag_error,flux,flux_error。系统会自动识别列名（不区分大小写）。每个天体至少需要 5 个有效数据点。</div>
+                    </div>
+                </div>
+                
+                <!-- Training Progress -->
+                <div class="card" id="trainProgressPanel" style="display: none; border-left: 4px solid var(--accent);">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-spinner fa-spin" id="trainSpinner"></i></div>
+                            <span data-i18n="train_progress">训练进度</span>
+                        </div>
+                        <div id="trainProgressPercent" style="font-size: 1.2rem; font-weight: 700; color: var(--accent);">0%</div>
+                    </div>
+                    <div class="progress-container" style="background: var(--bg); border-radius: 10px; height: 28px; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border);">
+                        <div class="progress-bar" id="trainProgressBar" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 10px; width: 0%; transition: width 0.4s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div id="trainProgressText" style="color: var(--text); font-size: 0.95rem; font-weight: 500;">Waiting...</div>
+                            <div id="trainProgressStep" style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 2px;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ONNX Export -->
+                <div class="card" id="trainOnnxPanel" style="display: none;">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-file-export"></i></div>
+                            <span data-i18n="train_onnx_title">ONNX 模型导出</span>
+                        </div>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;" data-i18n="train_onnx_desc">
+                        训练完成后，若 ONNX 模型未自动同步，可手动触发导出。
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-sm btn-primary" onclick="window.exportOnnxModels();" id="trainOnnxBtn">
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="train_onnx_export">导出 ONNX</span>
+                        </button>
+                        <span id="trainOnnxStatus" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                    </div>
+                </div>
+                
+                <!-- Training Data Summary -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <div class="card-icon"><i class="fas fa-chart-bar"></i></div>
+                            <span data-i18n="train_summary">训练数据概览</span>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="window.loadTrainingSummary();">
+                            <i class="fas fa-sync-alt"></i> <span data-i18n="train_refresh">刷新</span>
+                        </button>
+                    </div>
+                    <div id="trainSummaryContent" style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.8;">
+                        <div style="text-align: center; padding: 24px;">
+                            <i class="fas fa-inbox" style="font-size: 2rem; color: var(--border); margin-bottom: 8px;"></i>
+                            <p data-i18n="train_summary_empty">暂无训练数据</p>
+                            <p style="font-size: 0.8rem;" data-i18n="train_summary_hint">上传数据后点击刷新查看</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="btn-row">
+                    <button class="btn btn-danger" onclick="window.clearTrainingData();" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-trash-alt"></i> <span data-i18n="train_clear">清空所有训练数据</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
         <!-- 系统设置页 -->
         <div id="settingsTab" class="tab-content">
             <div class="settings-container">
@@ -1314,8 +1526,8 @@
                             <label class="form-label" data-i18n="database_name">数据库名称</label>
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" class="form-input" id="configDbName" placeholder="gaiadr2_lc">
-                                <select id="dbListSelect" class="form-input" style="width: 40px; padding: 0 8px;" onchange="document.getElementById('configDbName').value = this.value;">
-                                    <option value="">▼</option>
+                                <select id="dbListSelect" class="form-input" style="width: 40px; padding: 0 4px;" onchange="document.getElementById('configDbName').value = this.value;">
+                                    <option value=""></option>
                                 </select>
                             </div>
                         </div>

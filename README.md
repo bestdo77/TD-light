@@ -389,6 +389,32 @@ export LD_LIBRARY_PATH=/path/to/TDlight/libs:$LD_LIBRARY_PATH
 2. Check `config.json` database settings
 3. Verify port 6030 is accessible
 
+### `feets` Installation Fails (`BadZipFile`)
+
+The `feets` 0.4 package uses an outdated `ez_setup.py` that tries to download an old `setuptools-18.0.1.zip`, which often fails with:
+```
+zipfile.BadZipFile: File is not a zip file
+```
+
+**Solution:** The `install.sh` script handles this automatically. If installing manually:
+```bash
+pip download feets==0.4 --no-deps -d /tmp/feets_pkg
+cd /tmp/feets_pkg && tar -xzf feets-0.4.tar.gz && cd feets-0.4
+# Remove broken ez_setup references
+sed -i '42,43d' setup.py
+sed -i 's/        py_modules=["ez_setup"],//' setup.py
+python setup.py install
+```
+
+### `taos` Python Connector Not Found
+
+The PyPI package name for the TDengine Python connector is **`taos`** (imported as `taos`), not `taospy`.
+
+If `import taos` fails:
+```bash
+pip install taos taos-ws-py
+```
+
 ### VNodes Exhausted Error
 
 Database VGroups resources exhausted. Solutions:

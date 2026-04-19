@@ -77,3 +77,12 @@ benchmark/figures/
 # Docker volumes
 tdlight-data/
 tdlight-log/
+
+# Sample data archives
+lightcurve_*.zip
+
+# Model backups
+models/**/*.bak*
+
+# Training data (runtime generated)
+models/training_data/

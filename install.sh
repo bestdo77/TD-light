@@ -390,7 +390,31 @@ if [[ "$SKIP_CONDA" != "true" ]]; then
     # Install Python dependencies
     print_step "Installing Python dependencies..."
     if [ -f "$PROJECT_ROOT/requirements.txt" ]; then
-        pip install -r "$PROJECT_ROOT/requirements.txt" -q
+        # feets 0.4 uses an outdated ez_setup.py that downloads an old setuptools
+        # zip which is often corrupted/blocked. We install other deps first, then
+        # handle feets with a fallback workaround.
+        grep -v "^feets" "$PROJECT_ROOT/requirements.txt" > /tmp/requirements_no_feets.txt
+        pip install -r /tmp/requirements_no_feets.txt -q
+        
+        # Try standard feets install first
+        print_step "Installing feets (feature extraction library)..."
+        if pip install "feets>=0.4" -q 2>/dev/null; then
+            print_success "feets installed"
+        else
+            print_warning "Standard feets installation failed, applying workaround..."
+            # Download feets source, patch out broken ez_setup, and install locally
+            pip download "feets==0.4" --no-deps -d /tmp/feets_pkg -q
+            cd /tmp/feets_pkg
+            tar -xzf feets-0.4.tar.gz
+            cd feets-0.4
+            # Remove ez_setup imports and module reference from setup.py
+            sed -i '42,43d' setup.py
+            sed -i 's/        py_modules=\["ez_setup"\],//' setup.py
+            python setup.py install -q
+            cd "$PROJECT_ROOT"
+            print_success "feets installed via workaround"
+        fi
+        
         print_success "Python dependencies installed"
     else
         print_warning "requirements.txt not found"
@@ -548,7 +572,7 @@ if pgrep -x taosd > /dev/null; then
     print_step "Creating database 'gaiadr2_lc'..."
     
     # Use taos CLI to create database
-    if "$TDENGINE_HOME/bin/taos" -c "$TAOS_CONFIG_DIR" -s "CREATE DATABASE IF NOT EXISTS gaiadr2_lc VGROUPS 128 BUFFER 256 KEEP 365d;" 2>/dev/null; then
+    if "$TDENGINE_HOME/bin/taos" -c "$TAOS_CONFIG_DIR" -s "CREATE DATABASE IF NOT EXISTS gaiadr2_lc VGROUPS 128 BUFFER 256 KEEP 36500d;" 2>/dev/null; then
         print_success "Database 'gaiadr2_lc' ready"
     else
         print_warning "Could not create database automatically"
@@ -625,7 +649,7 @@ if [[ "$SKIP_CONDA" != "true" ]]; then
     eval "$(conda shell.bash hook)"
     conda activate "$CONDA_ENV_NAME" 2>/dev/null
     
-    PYTHON_DEPS=("numpy" "pandas" "taos" "lightgbm" "sklearn" "joblib" "onnxruntime")
+    PYTHON_DEPS=("numpy" "pandas" "taos" "lightgbm" "sklearn" "joblib" "onnxruntime" "onnxmltools" "flask")
     for dep in "${PYTHON_DEPS[@]}"; do
         if python -c "import $dep" 2>/dev/null; then
             print_success "Python: $dep"
@@ -680,11 +704,12 @@ echo ""
 echo "  2. Start TDengine (if not already running):"
 echo "     ${CYAN}systemctl --user start taosd${NC}"
 echo ""
-echo "  3. Start web interface:"
-echo "     ${CYAN}cd web && ./web_api${NC}"
+echo "  3. Start all services:"
+echo "     ${CYAN}./start_env.sh${NC}"
 echo ""
 echo "  4. Open browser:"
-echo "     ${CYAN}http://localhost:5001${NC}"
+echo "     ${CYAN}http://localhost:5001${NC}  (Main UI)"
+echo "     ${CYAN}http://localhost:5002${NC}  (Training API)"
 echo ""
 echo "  5. Import test data (optional):"
 echo "     Use web interface → Data Import → Select testdata/catalogs/"
