@@ -41,6 +41,7 @@ cd TD-light
 | **数据库** | TDengine 3.4+ | 高性能时序数据库（用户模式安装，无需 sudo） |
 | **后端** | C++17 | 原生 HTTP 服务器、HEALPix 空间索引 |
 | **机器学习** | Python + LightGBM + ONNX Runtime | `feets` 特征提取 + 加速推理 |
+| **增量训练** | Flask (Python) | 训练服务器，SSE 实时推送进度 |
 | **前端** | HTML/JS | Three.js 3D 天球、Chart.js 交互式图表 |
 
 ---
@@ -56,6 +57,7 @@ cd TD-light
 | **自动分类** | 自动检测新导入或数据增长的天体，分批后台处理 |
 | **星表不一致检测** | 识别出 560 个高置信度星表不一致候选体，供后续验证 |
 | **数据导入** | Web 界面一键导入，或命令行多线程高性能导入 |
+| **增量训练** | 上传带 `class` 列的光变曲线，自动识别标签并增量更新 7 个子模型 |
 | **3D 天球** | WebGL 渲染的交互式三维天球 |
 
 ---
@@ -73,6 +75,7 @@ cd TD-light
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      web_api (C++ 后端)                          │
+│                      train_server (Flask, :5002)                │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │  检索 API   │  │  分类 API   │  │      数据导入 API        │  │
@@ -117,7 +120,14 @@ cd TD-light
    - 默认使用 ONNX Runtime（比 sklearn 快约 3.7 倍）；未安装时自动回退到 sklearn
    - 高置信度结果自动写回 TDengine
 
-4. **数据导入器 (`catalog_importer` / `lightcurve_importer`)**
+4. **增量训练 (`class/incremental_train.py` + `train_server.py`)**
+   - Web 界面上传 CSV/ZIP 光变曲线
+   - 自动识别 `class` / `label` / `type` 列中的类别标签
+   - 使用 `init_model=old_model` 增量训练全部 7 个子模型
+   - 后台自动导出 ONNX + 手动重导出端点
+   - 训练失败自动回滚到备份模型
+
+5. **数据导入器 (`catalog_importer` / `lightcurve_importer`)
    - 独立的 C++ 多线程并行导入程序
    - Web 导入默认：16 线程、32 VGroups
    - 命令行支持自定义 `--threads` 和 `--vgroups`
@@ -153,8 +163,8 @@ source start_env.sh
 # 启动 TDengine（如未运行）
 systemctl --user start taosd
 
-# 启动 Web 服务
-cd web && ./web_api
+# 启动服务
+source start_env.sh        # 同时启动 web_api (5001) + train_server (5002) + TDengine
 ```
 
 打开浏览器访问 [http://localhost:5001](http://localhost:5001)。
@@ -213,9 +223,11 @@ cd web && ./web_api
 
 **光变曲线 CSV**（每个天体一个文件）：
 ```csv
-source_id,band,time,mag,mag_error,flux,flux_error
-12345678,G,2015.5,15.234,0.002,1234.5,2.5
+source_id,band,time,mag,mag_error,flux,flux_error,class
+12345678,G,2015.5,15.234,0.002,1234.5,2.5,ROT
 ```
+
+> **提示：** 在 CSV 中添加 `class`（或 `label` / `type`）列，可在训练上传时启用**自动识别模式**。支持的标签：`Non-var`、`ROT`、`EA`、`EW`、`CEP`、`DSCT`、`RRAB`、`RRC`、`M`、`SR`、`EB`。
 
 **坐标文件 CSV**（所有天体一个文件）：
 ```csv
@@ -325,10 +337,14 @@ TDlight/
 │   ├── build.sh
 │   └── static/              # 前端资源
 │
-├── class/                   # 分类模块
+├── class/                   # 分类与训练模块
 │   ├── classify_pipeline.py
 │   ├── auto_classify.py
-│   └── hierarchical_predictor.py
+│   ├── hierarchical_predictor.py
+│   ├── feature_extractor.py       # feets 特征提取
+│   ├── incremental_train.py       # 增量训练流水线
+│   ├── train_server.py            # Flask HTTP 服务器 (端口 5002)
+│   └── training_data_manager.py   # 训练数据持久化
 │
 ├── insert/                  # 数据导入器
 │   ├── catalog_importer.cpp
@@ -376,6 +392,13 @@ TDlight/
 | `/api/config/reload` | GET | 重载配置到后端 |
 | `/api/databases` | GET | 列出数据库 |
 | `/api/database/drop` | POST | 删除数据库 |
+| `/api/train/upload` | POST | 上传训练 CSV/ZIP |
+| `/api/train/start` | POST | 启动特征提取 / 训练 |
+| `/api/train/stream` | GET (SSE) | 训练进度流 |
+| `/api/train/stop` | POST | 停止训练 |
+| `/api/train/summary` | GET | 训练数据概览 |
+| `/api/train/export_onnx` | POST | 手动导出 ONNX |
+| `/api/train/clear` | POST | 清空所有训练数据 |
 
 ---
 

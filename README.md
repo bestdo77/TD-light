@@ -41,6 +41,7 @@ For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md)
 | **Database** | TDengine 3.4+ | High-performance time-series database (user-mode, no sudo) |
 | **Backend** | C++17 | Raw-socket HTTP server, HEALPix spatial indexing |
 | **ML** | Python + LightGBM + ONNX Runtime | `feets` feature extraction + accelerated inference |
+| **Training** | Flask (Python) | Incremental model training server with SSE progress |
 | **Frontend** | HTML/JS | Three.js 3D celestial sphere, Chart.js interactive plots |
 
 ---
@@ -56,6 +57,7 @@ For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md)
 | **Auto Classification** | Detects new or updated objects automatically and classifies them in batches |
 | **Catalog Disagreement Detection** | Identifies 560 high-confidence catalog-disagreement candidates for follow-up verification |
 | **Data Import** | One-click CSV import via web UI or high-performance multi-threaded CLI |
+| **Incremental Training** | Upload light curves with optional `class` column; auto-detect labels and incrementally train all 7 sub-models |
 | **3D Celestial Sphere** | WebGL-rendered interactive sky visualization |
 
 ---
@@ -73,6 +75,7 @@ For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md)
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      web_api (C++ Backend)                       │
+│                      train_server (Flask, :5002)                 │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ Search API  │  │Classify API │  │    Data Import API      │  │
@@ -116,7 +119,14 @@ For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md)
    - ONNX Runtime by default (~3.7× faster than sklearn); auto-fallback to sklearn if ONNX is unavailable
    - High-confidence results written back to TDengine automatically
 
-4. **Data Importers (`catalog_importer` / `lightcurve_importer`)**
+4. **Incremental Training (`class/incremental_train.py` + `train_server.py`)**
+   - Upload CSV/ZIP light curves via web UI
+   - Auto-detect class labels from `class` / `label` / `type` column
+   - Incrementally train all 7 sub-models with `init_model=old_model`
+   - Background ONNX export + manual re-export endpoint
+   - Model backup/rollback on training failure
+
+5. **Data Importers (`catalog_importer` / `lightcurve_importer`)**
    - Standalone multi-threaded C++ programs
    - Web defaults: 16 threads, 32 VGroups
    - CLI supports custom `--threads` and `--vgroups`
@@ -152,8 +162,8 @@ source start_env.sh
 # Start TDengine (if not running)
 systemctl --user start taosd
 
-# Start the web interface
-cd web && ./web_api
+# Start services
+source start_env.sh        # Starts web_api (5001) + train_server (5002) + TDengine
 ```
 
 Open [http://localhost:5001](http://localhost:5001).
@@ -212,9 +222,11 @@ Coordinates are used to compute HEALPix indices and set table TAGS.
 
 **Light Curve CSV** (one file per object):
 ```csv
-source_id,band,time,mag,mag_error,flux,flux_error
-12345678,G,2015.5,15.234,0.002,1234.5,2.5
+source_id,band,time,mag,mag_error,flux,flux_error,class
+12345678,G,2015.5,15.234,0.002,1234.5,2.5,ROT
 ```
+
+> **Tip:** Add a `class` (or `label` / `type`) column to enable **auto-detect mode** during training upload. Supported values: `Non-var`, `ROT`, `EA`, `EW`, `CEP`, `DSCT`, `RRAB`, `RRC`, `M`, `SR`, `EB`.
 
 **Coordinate File CSV** (one file for all objects):
 ```csv
@@ -311,10 +323,14 @@ TDlight/
 │   ├── build.sh
 │   └── static/              # Frontend assets
 │
-├── class/                   # Classification module
+├── class/                   # Classification & training module
 │   ├── classify_pipeline.py
 │   ├── auto_classify.py
-│   └── hierarchical_predictor.py
+│   ├── hierarchical_predictor.py
+│   ├── feature_extractor.py       # feets feature extraction
+│   ├── incremental_train.py       # Incremental training pipeline
+│   ├── train_server.py            # Flask HTTP server (port 5002)
+│   └── training_data_manager.py   # Training data persistence
 │
 ├── insert/                  # Data importers
 │   ├── catalog_importer.cpp
@@ -362,6 +378,13 @@ TDlight/
 | `/api/config/reload` | GET | Reload backend configuration |
 | `/api/databases` | GET | List databases |
 | `/api/database/drop` | POST | Drop a database |
+| `/api/train/upload` | POST | Upload training CSV/ZIP |
+| `/api/train/start` | POST | Start feature extraction / training |
+| `/api/train/stream` | GET (SSE) | Training progress |
+| `/api/train/stop` | POST | Stop training |
+| `/api/train/summary` | GET | Training data summary |
+| `/api/train/export_onnx` | POST | Manual ONNX export |
+| `/api/train/clear` | POST | Clear all training data |
 
 ---
 
@@ -408,11 +431,11 @@ python setup.py install
 
 ### `taos` Python Connector Not Found
 
-The PyPI package name for the TDengine Python connector is **`taos`** (imported as `taos`), not `taospy`.
+The PyPI package name for the TDengine Python connector is **`taospy`** (imported as `taos`).
 
 If `import taos` fails:
 ```bash
-pip install taos taos-ws-py
+pip install taospy taos-ws-py
 ```
 
 ### VNodes Exhausted Error
