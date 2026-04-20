@@ -10,6 +10,8 @@ English | [中文](README_CN.md)
 >
 > **Pre-trained Models:** [HuggingFace — bestdo77/Lightcurve_lgbm_111w_15_model](https://huggingface.co/bestdo77/Lightcurve_lgbm_111w_15_model)
 
+> **Note:** TDlight v2.0.0 adds **incremental training** with auto class detection, **ONNX Runtime** inference (~3.7x faster than sklearn), and a web-based training UI. See [Installation](#installation) and [Incremental Training](#incremental-training) for details.
+
 ---
 
 ## Quick Start
@@ -23,6 +25,22 @@ cd TD-light
 Then open [http://localhost:5001](http://localhost:5001).
 
 For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md).
+
+---
+
+## Table of Contents
+
+- [Web Interface](#web-interface)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [System Architecture](#system-architecture)
+- [Installation](#installation)
+- [Data Import](#data-import)
+- [Search Functions](#search-functions)
+- [Classification Functions](#classification-functions)
+- [Incremental Training](#incremental-training)
+- [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -120,11 +138,10 @@ For detailed installation options and manual steps, see [INSTALL.md](INSTALL.md)
    - High-confidence results written back to TDengine automatically
 
 4. **Incremental Training (`class/incremental_train.py` + `train_server.py`)**
-   - Upload CSV/ZIP light curves via web UI
-   - Auto-detect class labels from `class` / `label` / `type` column
+   - Upload CSV/ZIP light curves via web UI; auto-detect class labels
    - Incrementally train all 7 sub-models with `init_model=old_model`
-   - Background ONNX export + manual re-export endpoint
-   - Model backup/rollback on training failure
+   - Background ONNX export + model backup/rollback on failure
+   - See [Incremental Training](#incremental-training) for full details
 
 5. **Data Importers (`catalog_importer` / `lightcurve_importer`)**
    - Standalone multi-threaded C++ programs
@@ -304,6 +321,34 @@ The auto-classifier is fully decoupled from importers:
 Adjustable in **System Settings**:
 - Above threshold: automatically written to database
 - Below threshold: displayed only
+
+---
+
+## Incremental Training
+
+Upload light curves with optional `class` / `label` / `type` column via the web UI. The system auto-detects labels, extracts 15 `feets` features, and incrementally trains all 7 sub-models using `init_model=old_model`.
+
+**Supported labels:** `Non-var`, `ROT`, `EA`, `EW`, `CEP`, `DSCT`, `RRAB`, `RRC`, `M`, `SR`, `EB`
+
+| Step | Description |
+|------|-------------|
+| **Upload** | Drag-and-drop CSV or ZIP via the Training tab |
+| **Extract** | Auto-extract 15 features per light curve |
+| **Train** | Incrementally update relevant sub-models |
+| **Export** | Background ONNX export + manual re-export API |
+| **Rollback** | Automatic backup restore if training fails |
+
+**API Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/train/upload` | Upload CSV/ZIP |
+| POST | `/api/train/start` | Start feature extraction / training |
+| GET | `/api/train/stream` | SSE progress stream |
+| POST | `/api/train/stop` | Stop training |
+| GET | `/api/train/summary` | Training data summary |
+| POST | `/api/train/export_onnx` | Manual ONNX export |
+| POST | `/api/train/clear` | Clear all training data |
 
 ---
 
