@@ -239,6 +239,11 @@ const i18n = {
         train_summary_hint: '上传数据后点击刷新查看',
         train_refresh: '刷新',
         train_clear: '清空所有训练数据',
+
+        // ONNX Export
+        train_onnx_title: 'ONNX 模型导出',
+        train_onnx_desc: '将训练后的模型导出为 ONNX 格式，用于推理加速。',
+        train_onnx_export: '导出 ONNX',
     },
     
     en: {
@@ -476,6 +481,11 @@ const i18n = {
         train_summary_hint: 'Upload data and click refresh to view',
         train_refresh: 'Refresh',
         train_clear: 'Clear All Training Data',
+
+        // ONNX Export
+        train_onnx_title: 'Export ONNX Models',
+        train_onnx_desc: 'Export trained models to ONNX format for inference acceleration.',
+        train_onnx_export: 'Export ONNX',
     }
 };
 

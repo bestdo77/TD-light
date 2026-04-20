@@ -18,6 +18,7 @@ import warnings
 import multiprocessing as mp
 from functools import partial
 from datetime import datetime
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hierarchical_predictor import load_hierarchical_predictor
 
 warnings.filterwarnings('ignore')

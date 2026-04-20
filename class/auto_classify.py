@@ -23,6 +23,7 @@ import warnings
 import multiprocessing as mp
 from datetime import datetime
 from pathlib import Path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hierarchical_predictor import load_hierarchical_predictor
 
 warnings.filterwarnings('ignore')
