@@ -444,7 +444,7 @@ function updateMetadata(meta, count) {
     document.getElementById('metaHealpixId').textContent = meta.healpix_id || '-';
     document.getElementById('metaRa').textContent = meta.ra?.toFixed(4) + '°' || '-';
     document.getElementById('metaDec').textContent = meta.dec?.toFixed(4) + '°' || '-';
-    document.getElementById('metaClass').textContent = meta.object_class || 'UNKNOWN';
+    document.getElementById('metaClass').textContent = formatClassName(meta.object_class) || 'UNKNOWN';
     document.getElementById('metaCount').textContent = count || '-';
     document.getElementById('objectInfo').textContent = `Source ID: ${meta.source_id}`;
 }
@@ -633,11 +633,15 @@ function displayResults(results) {
             <tr onclick="viewObject('${res.source_id}')">
                 <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">${res.source_id}</td>
                 <td style="color: var(--text-secondary); font-size: 0.85rem;">${res.ra?.toFixed(2)}°, ${res.dec?.toFixed(2)}°</td>
-                <td><span class="class-badge" style="background: ${classColor};">${res.prediction}</span></td>
+                <td><span class="class-badge" style="background: ${classColor};">${formatClassName(res.prediction)}</span></td>
                 <td style="font-weight: 600; color: ${scoreColor}; font-family: 'JetBrains Mono', monospace;">${res.confidence?.toFixed(4) || '-'}</td>
             </tr>
         `;
     }).join('');
+}
+
+function formatClassName(cls) {
+    return cls === 'RRC' ? 'RRc' : cls;
 }
 
 function getClassColor(cls) {
@@ -1091,7 +1095,7 @@ window.downloadObjectList = function() {
             obj.ra,
             obj.dec,
             obj.healpix_id,
-            obj.object_class || 'UNKNOWN',
+            formatClassName(obj.object_class) || 'UNKNOWN',
             obj.band || 'Unknown'
         ].join(",");
         csvContent += row + "\n";
